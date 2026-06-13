@@ -9,6 +9,9 @@ token.local
 # Machine-specific config — copy projects.example.json to projects.json and edit
 projects.json
 
+# Generated machine-specific hidden launcher (created by schedule:install)
+scripts/run-hidden.generated.vbs
+
 # Claude Code local tooling
 .claude/
 

@@ -102,6 +102,9 @@ pnpm schedule:uninstall
 Both scripts are idempotent (delete-then-create), so re-running install never duplicates
 the task.
 
+- The daemon runs **windowless** (no console window): install generates a small hidden
+  launcher (`scripts/run-hidden.generated.vbs`, gitignored) that starts node via
+  `wscript.exe`. `schedule:uninstall` removes both the task and the generated launcher.
 - The task runs as the **current user in your interactive session** — required so it can
   reach Docker Desktop (which only runs in the interactive session).
 - Task Scheduler does **not** inherit your shell environment variables. That's why the
