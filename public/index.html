@@ -261,6 +261,7 @@
       }
 
       function renderAuthError() {
+        if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
         showLoginOverlay('Session expired — please log in again.');
       }
 
