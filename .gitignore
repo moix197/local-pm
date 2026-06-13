@@ -4,6 +4,7 @@ node_modules/
 # Environment / secrets
 .env
 .env.*
+token.local
 
 # Machine-specific config — copy projects.example.json to projects.json and edit
 projects.json

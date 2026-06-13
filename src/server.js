@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { getWorktrees } from './worktrees.js';
 import { startServer, stopServer, getStatus, getLogs } from './runner.js';
 import { getLanIPv4 } from './netinfo.js';
+import { ensureToken, isAuthorized } from './token.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const indexHtml = path.join(repoRoot, 'public', 'index.html');
@@ -72,6 +73,9 @@ async function handleStop(res) {
 async function route(req, res) {
   const { method } = req;
   const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (url.pathname.startsWith('/api/') && !isAuthorized(req)) {
+    return sendJson(res, 401, { error: 'Unauthorized' });
+  }
   if (method === 'GET' && url.pathname === '/') return serveIndex(res);
   if (method === 'GET' && url.pathname === '/api/state') return handleState(res);
   if (method === 'POST' && url.pathname === '/api/start') return handleStart(req, res);
@@ -88,4 +92,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`local-pm listening`);
   console.log(`  local: http://localhost:${PORT}`);
   console.log(`  LAN:   http://${lanIp}:${PORT}`);
+  const { token, isNew } = ensureToken();
+  if (isNew) console.log(`  token: ${token}`);
+  else console.log(`  auth token loaded from token.local`);
 });

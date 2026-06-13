@@ -73,6 +73,15 @@
         margin-top: 24px;
       }
       .logs h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+      .auth-error {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--red);
+        padding: 12px 14px;
+        border-radius: 6px;
+        color: var(--muted);
+      }
+      .auth-error code { color: var(--text); }
       pre {
         background: #010409;
         border: 1px solid var(--border);
@@ -103,8 +112,22 @@
     <script type="module">
       let inFlight = false;
 
+      const hashToken = new URLSearchParams(location.hash.slice(1)).get('token');
+      if (hashToken) {
+        sessionStorage.setItem('lpm-token', hashToken);
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+      const TOKEN = sessionStorage.getItem('lpm-token') ?? '';
+
+      class AuthError extends Error {}
+
+      function authHeaders(extra = {}) {
+        return { Authorization: 'Bearer ' + TOKEN, ...extra };
+      }
+
       async function fetchState() {
-        const res = await fetch('/api/state');
+        const res = await fetch('/api/state', { headers: authHeaders() });
+        if (res.status === 401) throw new AuthError('unauthorized');
         return res.json();
       }
 
@@ -112,16 +135,27 @@
         inFlight = true;
         render(lastState, true);
         try {
-          await fetch(url, {
+          const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
             body: body ? JSON.stringify(body) : undefined,
           });
+          if (res.status === 401) throw new AuthError('unauthorized');
           lastState = await fetchState();
+        } catch (err) {
+          if (err instanceof AuthError) return renderAuthError();
+          throw err;
         } finally {
           inFlight = false;
           render(lastState);
         }
+      }
+
+      function renderAuthError() {
+        document.getElementById('projects').innerHTML =
+          '<div class="auth-error">Unauthorized — add your token via ' +
+          '<code>#token=&lt;value&gt;</code> in the URL ' +
+          '(the full value is printed once when the server first starts).</div>';
       }
 
       function groupByProject(worktrees) {
@@ -205,8 +239,13 @@
       let lastState = null;
       async function tick() {
         if (!inFlight) {
-          lastState = await fetchState();
-          render(lastState);
+          try {
+            lastState = await fetchState();
+            render(lastState);
+          } catch (err) {
+            if (err instanceof AuthError) return renderAuthError();
+            throw err;
+          }
         }
       }
       tick();

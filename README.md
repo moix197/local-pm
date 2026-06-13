@@ -41,6 +41,45 @@ Then open <http://localhost:7420>. On startup it prints the local and LAN URLs.
 
 Override the port with `LOCAL_PM_PORT` (default `7420`).
 
+## Authentication
+
+Every `/api/*` route is protected by a bearer token. `GET /` (the page itself) is open.
+
+On first startup the server generates a 64-char token, writes it to `token.local` (repo
+root, gitignored), and prints it **once**:
+
+```
+  token: 1a2b3c…
+```
+
+Subsequent starts print a masked line instead — safe to capture in a log file:
+
+```
+  auth token loaded from token.local
+```
+
+If you lose the value, read it from `token.local` directly. Delete the file to rotate it
+(a new one is generated on next start).
+
+**Browser:** open `http://localhost:7420/#token=<value>`. The page reads the token from
+the URL fragment, stores it in `sessionStorage`, and strips the fragment from the URL bar.
+Open `GET /` without a token and the page loads but shows an "add your token" message in
+place of the project list.
+
+**curl:** pass the token as a bearer header.
+
+```sh
+# state
+curl -H "Authorization: Bearer <token>" http://localhost:7420/api/state
+# start a worktree's dev server
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"path":"C:/path/to/worktree"}' http://localhost:7420/api/start
+# stop the active dev server
+curl -X POST -H "Authorization: Bearer <token>" http://localhost:7420/api/stop
+```
+
+Without a valid token these endpoints return `401 {"error":"Unauthorized"}`.
+
 ## Reach from another LAN machine
 
 Open `http://<desktop-ip>:7420` from any device on the same network — the dashboard
