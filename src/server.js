@@ -59,7 +59,12 @@ async function findWorktreeMeta(targetPath) {
 async function handleStart(req, res) {
   const { path: worktreePath } = await readJsonBody(req);
   if (!worktreePath) return sendJson(res, 400, { error: 'path is required' });
-  const meta = await findWorktreeMeta(worktreePath);
+  const worktrees = await getWorktrees();
+  const known = worktrees.find((w) => w.path === worktreePath);
+  if (!known || !fs.existsSync(worktreePath)) {
+    return sendJson(res, 400, { error: `unknown or missing worktree path: ${worktreePath}` });
+  }
+  const meta = { project: known.project, branch: known.branch };
   await startServer(worktreePath, meta);
   sendJson(res, 200, getStatus());
 }

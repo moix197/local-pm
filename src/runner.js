@@ -100,6 +100,10 @@ function spawnDevServer(worktreePath, meta) {
       active = null;
     }
   });
+  child.on('error', (err) => {
+    appendLog(`[error] failed to start ${meta?.branch ?? worktreePath}: ${err.message}`);
+    if (active && active.path === worktreePath) active = null;
+  });
 }
 
 // ---------------------------------------------------------------------------

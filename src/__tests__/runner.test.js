@@ -282,3 +282,72 @@ describe('stopServer', () => {
     assert.equal(runner.getStatus().active, null, 'active must be null after stop');
   });
 });
+
+// ---------------------------------------------------------------------------
+// spawn 'error' event handling
+// ---------------------------------------------------------------------------
+
+describe('spawn error handling', () => {
+  it('startServer does not reject when dev server emits error', async () => {
+    // install child auto-closes; dev child will emit 'error'
+    let spawnCall = 0;
+    let devChild;
+    runner._setSpawnFn((_cmd, _args, _opts) => {
+      spawnCall += 1;
+      if (spawnCall === 1) return makeChild(100, /* autoClose */ true);
+      devChild = makeChild(200, /* autoClose */ false);
+      return devChild;
+    });
+
+    const startP = runner.startServer('C:\\fake\\ErrPath', { project: 'p', branch: 'err-branch' });
+    await assert.doesNotReject(() => startP);
+
+    // Emit error after startServer resolves (async, as Node would do it).
+    devChild?.emit('error', new Error('ENOENT spawn failed'));
+    // Yield microtasks so the error handler runs.
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  it('records the error in getLogs() when dev server emits error', async () => {
+    let spawnCall = 0;
+    let devChild;
+    runner._setSpawnFn((_cmd, _args, _opts) => {
+      spawnCall += 1;
+      if (spawnCall === 1) return makeChild(100, /* autoClose */ true);
+      devChild = makeChild(200, /* autoClose */ false);
+      return devChild;
+    });
+
+    await runner.startServer('C:\\fake\\ErrLogs', { project: 'p', branch: 'log-branch' });
+    devChild?.emit('error', new Error('ENOENT spawn failed'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const captured = runner.getLogs();
+    const errorLine = captured.find((l) => l.includes('failed to start'));
+    assert.ok(errorLine, `expected an error log line, got: ${JSON.stringify(captured)}`);
+  });
+
+  it('resets active to null after dev server emits error', async () => {
+    let spawnCall = 0;
+    let devChild;
+    runner._setSpawnFn((_cmd, _args, _opts) => {
+      spawnCall += 1;
+      if (spawnCall === 1) return makeChild(100, /* autoClose */ true);
+      devChild = makeChild(200, /* autoClose */ false);
+      return devChild;
+    });
+
+    await runner.startServer('C:\\fake\\ErrIdle', { project: 'p', branch: 'idle-branch' });
+    assert.notEqual(runner.getStatus().active, null, 'should be active before error');
+
+    devChild?.emit('error', new Error('ENOENT spawn failed'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const s = runner.getStatus();
+    assert.equal(s.active, null, 'active must be null after spawn error');
+    assert.equal(s.installing, false, 'installing must be false after spawn error');
+  });
+});
