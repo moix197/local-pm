@@ -244,6 +244,10 @@
             document.getElementById('overlayError').textContent = 'Invalid token — try again.';
             return;
           }
+          if (!res.ok) {
+            document.getElementById('overlayError').textContent = 'Server error — try again.';
+            return;
+          }
           setStoredToken(candidate);
           lastState = await res.json();
           hideLoginOverlay();
