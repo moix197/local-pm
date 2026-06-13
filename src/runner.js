@@ -133,7 +133,11 @@ export async function stopServer() {
   active = null;
   installing = false;
   await _killFn(stopped.pid);
-  await _dockerDownFn(stopped.path);
+  try {
+    await _dockerDownFn(stopped.path);
+  } catch {
+    /* docker down errors are always ignored */
+  }
   appendLog(`[stopped] ${stopped.path} (pid ${stopped.pid})`);
   return getStatus();
 }

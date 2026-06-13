@@ -190,6 +190,37 @@ describe('startServer auto-stop sequencing', () => {
     assert.equal(s.active.pid, 2000, 'pid should be from B dev spawn');
   });
 
+  it('calls stopServer before spawning when switching worktrees', async () => {
+    // Start server A so active is set.
+    const refsA = {};
+    runner._setSpawnFn(makeSpawnStub(refsA));
+    await runner.startServer('C:\\fake\\SeqA', { project: 'p', branch: 'seq-a' });
+    assert.notEqual(runner.getStatus().active, null, 'A should be active');
+
+    // Instrument: record stop vs spawn order using the kill seam.
+    const order = [];
+    runner._setKillFn(async () => { order.push('stop'); });
+    runner._setDockerDownFn(async () => {});
+
+    const refsB = {};
+    let spawnCallInOrder = 0;
+    runner._setSpawnFn((...args) => {
+      spawnCallInOrder += 1;
+      if (spawnCallInOrder === 1) {
+        // install child — auto-close so runNpmInstall resolves
+        return makeChild(100, true);
+      }
+      order.push('spawn');
+      refsB.dev = makeChild(200, false);
+      return refsB.dev;
+    });
+
+    await runner.startServer('C:\\fake\\SeqB', { project: 'p', branch: 'seq-b' });
+
+    assert.deepEqual(order, ['stop', 'spawn'], 'stop must happen before spawn');
+    assert.equal(runner.getStatus().active?.branch, 'seq-b');
+  });
+
   it('ignores a second concurrent startServer call while first is in progress', async () => {
     // Use a manually-controlled install to keep first call in-flight.
     let installChild;
@@ -219,5 +250,35 @@ describe('startServer auto-stop sequencing', () => {
     assert.notEqual(runner.getStatus().active, null, 'first start should succeed');
     // Only 2 spawns: install + dev (p2 was rejected before any spawn)
     assert.equal(spawnCall, 2, `expected 2 spawn calls, got ${spawnCall}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stopServer — idempotency and error swallowing
+// ---------------------------------------------------------------------------
+
+describe('stopServer', () => {
+  it('is idempotent when no server is active — does not throw', async () => {
+    // beforeEach already called stopServer, so active is null here.
+    assert.equal(runner.getStatus().active, null);
+    // Calling again must not throw.
+    await assert.doesNotReject(() => runner.stopServer());
+    await assert.doesNotReject(() => runner.stopServer());
+  });
+
+  it('swallows a rejected dockerComposeDown and still resolves with active=null', async () => {
+    // Start a server so active is set.
+    const refs = {};
+    runner._setSpawnFn(makeSpawnStub(refs));
+    await runner.startServer('C:\\fake\\DockerErr', { project: 'p', branch: 'main' });
+    assert.notEqual(runner.getStatus().active, null);
+
+    // Make dockerDown reject (simulates Docker Desktop not running).
+    runner._setDockerDownFn(async () => { throw new Error('docker not available'); });
+    runner._setKillFn(async () => {});
+
+    // stopServer must resolve without throwing even though docker down errored.
+    await assert.doesNotReject(() => runner.stopServer());
+    assert.equal(runner.getStatus().active, null, 'active must be null after stop');
   });
 });
