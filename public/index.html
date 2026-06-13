@@ -94,12 +94,60 @@
         white-space: pre-wrap;
         word-break: break-all;
       }
+      .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+      }
+      .overlay.hidden { display: none; }
+      .overlay-panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 32px;
+        width: 100%;
+        max-width: 400px;
+      }
+      .overlay-panel h2 { margin: 0 0 8px; font-size: 16px; }
+      .overlay-panel p { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+      .overlay-panel input[type="text"] {
+        width: 100%;
+        font: inherit;
+        padding: 8px 10px;
+        background: #010409;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        margin-bottom: 12px;
+      }
+      .overlay-panel input[type="text"]:focus { outline: none; border-color: var(--accent); }
+      .overlay-error {
+        color: var(--red);
+        font-size: 13px;
+        margin-bottom: 12px;
+        min-height: 18px;
+      }
     </style>
   </head>
   <body>
+    <div id="loginOverlay" class="overlay hidden">
+      <div class="overlay-panel">
+        <h2>local-pm</h2>
+        <p>Paste your Bearer token to continue. The full value is printed once when the server first starts.</p>
+        <input id="tokenInput" type="text" placeholder="Token" autocomplete="off" />
+        <div id="overlayError" class="overlay-error"></div>
+        <button id="tokenSubmit" style="width:100%;border-color:var(--accent)">Log in</button>
+      </div>
+    </div>
     <header>
       <h1>local-pm</h1>
       <span id="lanUrl"></span>
+      <span style="flex:1"></span>
+      <a id="forgetLink" href="#" style="font-size:13px;color:var(--muted)">forget token</a>
     </header>
     <main>
       <div id="banner" class="banner hidden"></div>
@@ -112,12 +160,30 @@
     <script type="module">
       let inFlight = false;
 
+      const TOKEN_KEY = 'lpm-token';
+      let TOKEN = '';
+
+      function getStoredToken() {
+        return localStorage.getItem(TOKEN_KEY) ?? '';
+      }
+
+      function setStoredToken(value) {
+        localStorage.setItem(TOKEN_KEY, value);
+        TOKEN = value;
+      }
+
+      function clearStoredToken() {
+        localStorage.removeItem(TOKEN_KEY);
+        TOKEN = '';
+      }
+
       const hashToken = new URLSearchParams(location.hash.slice(1)).get('token');
       if (hashToken) {
-        sessionStorage.setItem('lpm-token', hashToken);
+        setStoredToken(hashToken);
         history.replaceState(null, '', location.pathname + location.search);
+      } else {
+        TOKEN = getStoredToken();
       }
-      const TOKEN = sessionStorage.getItem('lpm-token') ?? '';
 
       class AuthError extends Error {}
 
@@ -151,11 +217,47 @@
         }
       }
 
+      function showLoginOverlay(errorMsg = '') {
+        document.getElementById('overlayError').textContent = errorMsg;
+        document.getElementById('tokenInput').value = '';
+        document.getElementById('loginOverlay').classList.remove('hidden');
+        document.getElementById('tokenInput').focus();
+      }
+
+      function hideLoginOverlay() {
+        document.getElementById('loginOverlay').classList.add('hidden');
+      }
+
+      async function submitToken() {
+        const candidate = document.getElementById('tokenInput').value.trim();
+        if (!candidate) {
+          document.getElementById('overlayError').textContent = 'Token cannot be empty.';
+          return;
+        }
+        const btn = document.getElementById('tokenSubmit');
+        btn.disabled = true;
+        try {
+          const res = await fetch('/api/state', {
+            headers: { Authorization: 'Bearer ' + candidate },
+          });
+          if (res.status === 401) {
+            document.getElementById('overlayError').textContent = 'Invalid token — try again.';
+            return;
+          }
+          setStoredToken(candidate);
+          lastState = await res.json();
+          hideLoginOverlay();
+          render(lastState);
+          startPolling();
+        } catch {
+          document.getElementById('overlayError').textContent = 'Could not reach server.';
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
       function renderAuthError() {
-        document.getElementById('projects').innerHTML =
-          '<div class="auth-error">Unauthorized — add your token via ' +
-          '<code>#token=&lt;value&gt;</code> in the URL ' +
-          '(the full value is printed once when the server first starts).</div>';
+        showLoginOverlay('Session expired — please log in again.');
       }
 
       function groupByProject(worktrees) {
@@ -237,6 +339,8 @@
       }
 
       let lastState = null;
+      let pollingInterval = null;
+
       async function tick() {
         if (!inFlight) {
           try {
@@ -248,8 +352,29 @@
           }
         }
       }
-      tick();
-      setInterval(tick, 2000);
+
+      function startPolling() {
+        if (pollingInterval) return;
+        tick();
+        pollingInterval = setInterval(tick, 2000);
+      }
+
+      document.getElementById('tokenSubmit').addEventListener('click', submitToken);
+      document.getElementById('tokenInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitToken();
+      });
+      document.getElementById('forgetLink').addEventListener('click', e => {
+        e.preventDefault();
+        clearStoredToken();
+        if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+        showLoginOverlay();
+      });
+
+      if (TOKEN) {
+        startPolling();
+      } else {
+        showLoginOverlay();
+      }
     </script>
   </body>
 </html>
