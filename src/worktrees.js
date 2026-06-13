@@ -6,7 +6,14 @@ import { loadProjects } from './config.js';
 
 const execFileAsync = promisify(execFile);
 
-function parseWorktreePorcelain(stdout) {
+/**
+ * Parse the output of `git worktree list --porcelain` into worktree entries.
+ * Handles normal branches (stripping the `refs/heads/` prefix), detached HEAD
+ * (branch `(detached)`), and bare worktrees with no branch line (branch `null`).
+ * @param {string} stdout raw porcelain output
+ * @returns {Array<{ path: string, branch: string | null }>} parsed entries
+ */
+export function parseWorktreePorcelain(stdout) {
   const entries = [];
   let current = null;
   for (const line of stdout.split('\n')) {
@@ -43,6 +50,13 @@ async function getProjectWorktrees(project) {
   }
 }
 
+/**
+ * Discover git worktrees across all configured projects.
+ * Projects whose root does not exist (or whose `git` call fails) contribute an
+ * empty list rather than throwing, so a missing project root degrades gracefully.
+ * @returns {Promise<Array<{ project: string, branch: string, path: string, hasNodeModules: boolean }>>}
+ *   flattened list of worktrees across all projects
+ */
 export async function getWorktrees() {
   const projects = loadProjects();
   const lists = await Promise.all(projects.map(getProjectWorktrees));

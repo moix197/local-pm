@@ -18,6 +18,11 @@ Automates, per worktree, what you'd otherwise do by hand:
 
 Logs (last ~300 combined stdout/stderr lines) stream into the page.
 
+## Requirements
+
+- **Node.js v22+** (uses the built-in `node:test` runner and modern ESM features).
+- pnpm.
+
 ## Run
 
 ```sh
@@ -39,12 +44,14 @@ Edit `projects.json` at the repo root:
 
 ```json
 [
-  { "name": "web_template", "root": "C:/proyectos/web_template" }
+  { "name": "my-project", "root": "C:/path/to/your/project" }
 ]
 ```
 
-If `projects.json` is missing it's created with the `web_template` default on first run.
-Projects whose `root` doesn't exist are flagged and skipped.
+If `projects.json` is missing it's created with a generic placeholder on first run.
+Projects whose `root` doesn't exist are flagged and skipped. If `projects.json`
+contains invalid JSON, startup fails with a descriptive error
+(`projects.json is not valid JSON: …`) rather than starting silently broken.
 
 ## Limitations & assumptions
 
