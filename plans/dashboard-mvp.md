@@ -175,13 +175,13 @@ Note: `child_process` spawn/execFile are NOT mocked end-to-end — that adds cer
 
 **Steps:**
 
-- [ ] Read `stopServer` implementation; confirm `killProcessTree` error handling (try/catch around `execFileAsync` — already present in scaffold; verify the catch is bare and does not rethrow)
-- [ ] Confirm `dockerComposeDown` receives `cwd` as the stopped worktree's `path` — not the current working directory
-- [ ] Confirm `stopServer` is idempotent: calling it when `active` is null returns without error (already in scaffold — verify)
-- [ ] Confirm `startServer` calls `await stopServer()` BEFORE checking `node_modules` and before spawning — auto-switch correctness depends on stop completing first
-- [ ] Confirm that Docker Desktop not running does not crash the dashboard — `dockerComposeDown` errors are swallowed regardless of cause
-- [ ] Add tests to `src/__tests__/runner.test.js`: test `stopServer` when idle — no error thrown; test `startServer` auto-stop path — verify stop is called before spawn when `active` is set (stub both); test that `dockerComposeDown` error is swallowed (simulate rejected promise, confirm `stopServer` still resolves)
-- [ ] Run `pnpm test` — all pass
+- [x] Read `stopServer` implementation; confirm `killProcessTree` error handling (try/catch around `execFileAsync` — already present in scaffold; verify the catch is bare and does not rethrow)
+- [x] Confirm `dockerComposeDown` receives `cwd` as the stopped worktree's `path` — not the current working directory
+- [x] Confirm `stopServer` is idempotent: calling it when `active` is null returns without error (already in scaffold — verify)
+- [x] Confirm `startServer` calls `await stopServer()` BEFORE checking `node_modules` and before spawning — auto-switch correctness depends on stop completing first
+- [x] Confirm that Docker Desktop not running does not crash the dashboard — `dockerComposeDown` errors are swallowed regardless of cause (also re-wrapped at the call site)
+- [x] Add tests to `src/__tests__/runner.test.js`: test `stopServer` when idle — no error thrown; test `startServer` auto-stop path — verify stop is called before spawn when `active` is set (stub both); test that `dockerComposeDown` error is swallowed (simulate rejected promise, confirm `stopServer` still resolves)
+- [x] Run `pnpm test` — all pass (25/25)
 
 **Tests:**
 
@@ -193,10 +193,10 @@ Note: `taskkill` args and compose `cwd` correctness require a real child process
 
 **Verification:**
 
-- [ ] Automated tests pass: `pnpm test`
-- [ ] Manual: Start a worktree → click Stop → `Get-NetTCPConnection -LocalPort 3000` returns nothing (port freed)
-- [ ] Manual: Start worktree A → click Start on worktree B (no explicit Stop) → worktree A is killed, worktree B boots, no "address already in use" error in logs
-- [ ] Manual: Start a worktree → click Stop → click Stop again — no error, dashboard stays stable
+- [x] Automated tests pass: `pnpm test` (25/25)
+- [ ] Manual: Start a worktree → click Stop → `Get-NetTCPConnection -LocalPort 3000` returns nothing (port freed) — **deferred to Phase 5 hil**
+- [ ] Manual: Start worktree A → click Start on worktree B (no explicit Stop) → worktree A is killed, worktree B boots, no "address already in use" error in logs — **deferred to Phase 5 hil**
+- [ ] Manual: Start a worktree → click Stop → click Stop again — no error, dashboard stays stable — **deferred to Phase 5 hil**
 
 **Edge cases verified (manual):**
 
@@ -209,12 +209,12 @@ Note: `taskkill` args and compose `cwd` correctness require a real child process
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions reflected back into plan
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (README.md — verify Stop/switch description is accurate)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Phase marked complete
+- [x] Code-reviewer agent has verified this phase (verdict: green; one-token nit fixed in follow-up commit)
+- [x] Any changes made in response to code-reviewer suggestions reflected back into plan (unused `args` param dropped)
+- [x] Tests for this phase written and passing (25/25)
+- [x] Documentation updated (README.md — Stop/switch description accurate)
+- [x] Orchestrator (user) has verified and approved this phase (manual UI checks batched into Phase 5 hil)
+- [x] Phase marked complete
 
 ---
 
