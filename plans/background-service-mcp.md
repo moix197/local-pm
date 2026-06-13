@@ -147,9 +147,9 @@ file is listed in `.gitignore`.
 - [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file
 - [x] Tests for this phase written and passing
 - [x] Documentation updated (README.md — "Authentication" section added)
-- [ ] Orchestrator (user) has verified and approved this phase
+- [x] Orchestrator (user) has verified and approved this phase
 - [x] Changes committed: `feat: bearer token auth guard, token-file provisioning, browser fragment flow`
-- [ ] Phase marked complete
+- [x] Phase marked complete
 
 ---
 
@@ -175,7 +175,7 @@ after uninstall.
 
 **Steps:**
 
-- [ ] Create `scripts/schedule-install.js`:
+- [x] Create `scripts/schedule-install.js`:
   - Resolve `repoRoot` via `import.meta.url` (same pattern as other modules)
   - Resolve `nodePath` via `process.execPath` (the Node binary currently running the script)
   - Resolve `serverPath = path.join(repoRoot, 'src', 'server.js')`
@@ -183,11 +183,11 @@ after uninstall.
   - Create task: `execFileSync('schtasks', ['/create', '/tn', 'local-pm', '/tr', `"${nodePath}" "${serverPath}"`, '/sc', 'onlogon', '/rl', 'limited', '/f'], { stdio: 'inherit' })`
   - Print confirmation: "Task 'local-pm' installed. It will run automatically at next log-on."
   - Print token reminder: "Token is stored in token.local — start the server once first if you haven't already."
-- [ ] Create `scripts/schedule-uninstall.js`:
+- [x] Create `scripts/schedule-uninstall.js`:
   - Same `repoRoot` resolution pattern
   - `execFileSync('schtasks', ['/delete', '/tn', 'local-pm', '/f'], { stdio: 'inherit' })` in try/catch; on error print "Task 'local-pm' not found — nothing to remove."
-- [ ] Add scripts to `package.json`
-- [ ] Update `README.md` — new section "Run as a background service" with:
+- [x] Add scripts to `package.json`
+- [x] Update `README.md` — new section "Run as a background service" with:
   - `pnpm schedule:install` / `pnpm schedule:uninstall`
   - Note: task runs as current user in interactive session (required for Docker Desktop)
   - Note: env vars not inherited by Task Scheduler — token is in `token.local`, not an env var
@@ -210,16 +210,16 @@ requires a real Windows session and admin/user rights. Manual verification via
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions reflected back into this plan file
-- [ ] Tests for this phase written and passing (no-tests justification accepted)
-- [ ] Documentation updated (README.md — "Run as a background service" section added)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat: Task Scheduler install/uninstall scripts and pnpm scripts`
-- [ ] Phase marked complete
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file
+- [x] Tests for this phase written and passing (no-tests justification accepted)
+- [x] Documentation updated (README.md — "Run as a background service" section added)
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `feat: Task Scheduler install/uninstall scripts and pnpm scripts`
+- [x] Phase marked complete
 
 ---
 
