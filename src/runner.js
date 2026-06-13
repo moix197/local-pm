@@ -49,9 +49,30 @@ let _dockerDownFn = _defaultDockerDown;
 /** @internal — unit tests only */
 export function _setDockerDownFn(fn) { _dockerDownFn = fn; }
 
+// Production docker-running check
+async function _defaultDockerRunning() {
+  try { await execFileAsync('docker', ['info']); return true; }
+  catch { return false; }
+}
+
+let _dockerRunningFn = _defaultDockerRunning;
+
+/** @internal — unit tests only */
+export function _setDockerRunningFn(fn) { _dockerRunningFn = fn; }
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+function worktreeUsesDocker(worktreePath) {
+  const composeFiles = [
+    'docker-compose.yml',
+    'docker-compose.yaml',
+    'compose.yml',
+    'compose.yaml',
+  ];
+  return composeFiles.some((f) => fs.existsSync(path.join(worktreePath, f)));
+}
 
 function appendLog(line) {
   logs.push(line);
@@ -119,6 +140,10 @@ export async function startServer(worktreePath, meta) {
   if (inProgress) return getStatus();
   inProgress = true;
   try {
+    if (worktreeUsesDocker(worktreePath) && !(await _dockerRunningFn())) {
+      appendLog('[local-pm] Docker is not running — start Docker Desktop first, then try again.');
+      return getStatus();
+    }
     if (active) await stopServer();
     if (!fs.existsSync(path.join(worktreePath, 'node_modules'))) {
       installing = true;

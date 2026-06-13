@@ -23,6 +23,10 @@ Automates, per worktree, what you'd otherwise do by hand:
    `docker compose down` in the worktree (errors ignored — fine for worktrees with no
    compose file).
 4. Switching worktrees stops the current server before starting the new one.
+5. **Docker pre-flight**: if the worktree has a compose file (`docker-compose.yml` etc.)
+   and Docker Desktop isn't running, startup is aborted with a clear
+   `Docker is not running — start Docker Desktop first, then try again.` log message
+   instead of a raw error, and the currently-running server is left untouched.
 
 Logs (last ~300 combined stdout/stderr lines) stream into the page.
 

@@ -1,5 +1,8 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
 import * as runner from '../runner.js';
 
 // ---------------------------------------------------------------------------
@@ -69,6 +72,7 @@ function makeSpawnStub(refs = {}) {
 function stubAll() {
   runner._setKillFn(async () => {});
   runner._setDockerDownFn(async () => {});
+  runner._setDockerRunningFn(async () => true);
   runner._setSpawnFn(() => makeChild(0, true));
 }
 
@@ -386,5 +390,72 @@ describe('spawn error handling', () => {
     await Promise.resolve();
     await Promise.resolve();
     assert.equal(runner.getStatus().active, null, 'active must be null after errors');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// docker preflight
+// ---------------------------------------------------------------------------
+
+describe('docker preflight', () => {
+  it('logs the Docker-not-running message and does not spawn when compose file exists and Docker is down', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-pm-test-'));
+    try {
+      fs.writeFileSync(path.join(tmpDir, 'docker-compose.yml'), 'version: "3"\n');
+
+      let spawnCallCount = 0;
+      runner._setSpawnFn((_cmd, _args, _opts) => {
+        spawnCallCount += 1;
+        return makeChild(spawnCallCount * 100, true);
+      });
+      runner._setDockerRunningFn(async () => false);
+
+      const status = await runner.startServer(tmpDir, { project: 'p', branch: 'docker-down' });
+
+      assert.equal(spawnCallCount, 0, 'spawn must not be called when Docker is not running');
+      assert.equal(status.active, null, 'active must remain null');
+
+      const captured = runner.getLogs();
+      const msg = '[local-pm] Docker is not running — start Docker Desktop first, then try again.';
+      assert.ok(
+        captured.includes(msg),
+        `expected Docker-not-running message in logs, got: ${JSON.stringify(captured)}`,
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('proceeds to spawn when compose file exists and Docker IS running', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-pm-test-'));
+    try {
+      fs.writeFileSync(path.join(tmpDir, 'docker-compose.yml'), 'version: "3"\n');
+
+      const refs = {};
+      runner._setSpawnFn(makeSpawnStub(refs));
+      runner._setDockerRunningFn(async () => true);
+
+      await runner.startServer(tmpDir, { project: 'p', branch: 'docker-up' });
+
+      assert.notEqual(runner.getStatus().active, null, 'active must be set when Docker is running');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('skips the Docker check entirely when no compose file is present', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-pm-test-'));
+    try {
+      // No compose file written — Docker check must be bypassed.
+      const refs = {};
+      runner._setSpawnFn(makeSpawnStub(refs));
+      runner._setDockerRunningFn(async () => false);
+
+      await runner.startServer(tmpDir, { project: 'p', branch: 'no-compose' });
+
+      assert.notEqual(runner.getStatus().active, null, 'active must be set even though Docker returns false — no compose file');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
