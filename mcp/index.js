@@ -46,7 +46,7 @@ function toError(err) {
 
 const server = new McpServer({ name: 'local-pm', version: '0.1.0' });
 
-server.tool('list_worktrees', 'List all git worktrees known to the daemon', {}, async () => {
+server.registerTool('list_worktrees', { description: 'List all git worktrees known to the daemon' }, async () => {
   try {
     const state = await apiCall('GET', '/api/state');
     return toResult(state.worktrees);
@@ -55,7 +55,7 @@ server.tool('list_worktrees', 'List all git worktrees known to the daemon', {}, 
   }
 });
 
-server.tool('status', 'Get the current dev server status from the daemon', {}, async () => {
+server.registerTool('status', { description: 'Get the current dev server status from the daemon' }, async () => {
   try {
     const state = await apiCall('GET', '/api/state');
     return toResult(state.status);
@@ -64,10 +64,12 @@ server.tool('status', 'Get the current dev server status from the daemon', {}, a
   }
 });
 
-server.tool(
+server.registerTool(
   'start_server',
-  'Start the dev server for a given worktree path',
-  { path: z.string().describe('Absolute path to the worktree to start') },
+  {
+    description: 'Start the dev server for a given worktree path',
+    inputSchema: { path: z.string().describe('Absolute path to the worktree to start') },
+  },
   async ({ path: worktreePath }) => {
     try {
       const result = await apiCall('POST', '/api/start', { path: worktreePath });
@@ -78,7 +80,7 @@ server.tool(
   },
 );
 
-server.tool('stop_server', 'Stop the currently running dev server', {}, async () => {
+server.registerTool('stop_server', { description: 'Stop the currently running dev server' }, async () => {
   try {
     const result = await apiCall('POST', '/api/stop');
     return toResult(result);
