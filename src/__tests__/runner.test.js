@@ -204,7 +204,7 @@ describe('startServer auto-stop sequencing', () => {
 
     const refsB = {};
     let spawnCallInOrder = 0;
-    runner._setSpawnFn((...args) => {
+    runner._setSpawnFn(() => {
       spawnCallInOrder += 1;
       if (spawnCallInOrder === 1) {
         // install child — auto-close so runNpmInstall resolves
