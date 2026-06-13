@@ -87,7 +87,8 @@ Without a valid token these endpoints return `401 {"error":"Unauthorized"}`.
 ## Run as a background service
 
 To have local-pm start automatically at log-on (no terminal needed), register a Windows
-Task Scheduler task:
+Task Scheduler task. Run this from an **Administrator** terminal — creating the
+scheduled task (`schtasks /create`) requires elevation:
 
 ```sh
 pnpm schedule:install
@@ -121,67 +122,14 @@ the task.
 
 ## MCP adapter
 
-The `mcp/` folder is a standalone package that exposes local-pm's four daemon actions as
+The `mcp/` folder is a standalone package that exposes local-pm's four daemon actions —
+`list_worktrees`, `status`, `start_server`, `stop_server` — as
 [Model Context Protocol](https://modelcontextprotocol.io) tools so Claude Code (or any MCP
-client) can drive the daemon directly.
+client) can drive the daemon directly. The token is auto-read from `token.local` when
+`LOCAL_PM_TOKEN` is unset, and any failure (daemon down, non-2xx, missing token) surfaces
+as a structured MCP error rather than crashing.
 
-### Setup
-
-**First time (or after cloning):**
-
-```sh
-cd mcp && pnpm install
-```
-
-If the `mcp/node_modules` folder is missing (e.g. fresh clone), run the above. If you need
-to upgrade the SDK:
-
-```sh
-cd mcp && pnpm add @modelcontextprotocol/sdk
-```
-
-### Add to Claude Code
-
-Create or edit `.mcp.json` in your repo root (or `~/.claude/.mcp.json` for global use):
-
-```json
-{
-  "mcpServers": {
-    "local-pm": {
-      "command": "node",
-      "args": ["C:/path/to/local_pm/mcp/index.js"],
-      "env": {
-        "LOCAL_PM_URL": "http://localhost:7420",
-        "LOCAL_PM_TOKEN": "<paste token here — or omit to auto-read token.local>"
-      }
-    }
-  }
-}
-```
-
-Replace `C:/path/to/local_pm` with the absolute path to your repo. `LOCAL_PM_TOKEN` is
-optional — if omitted the adapter reads `token.local` from the repo root automatically.
-
-### Available tools
-
-| Tool | Params | What it does |
-|---|---|---|
-| `list_worktrees` | — | Returns the list of all known git worktrees |
-| `status` | — | Returns the current dev server status (running/idle, path, etc.) |
-| `start_server` | `path` (string) | Starts the dev server for the given worktree path |
-| `stop_server` | — | Stops the currently running dev server |
-
-### Token resolution
-
-`LOCAL_PM_TOKEN` env var takes precedence. If not set, the adapter reads `token.local`
-from the repo root (the same file the daemon generates on first start). If neither is
-available, tool calls return a clear MCP error instead of crashing.
-
-### Failure behavior
-
-When the daemon is unreachable, returns a non-2xx response, or the token is missing, each
-tool returns a structured MCP error (`isError: true`) with a descriptive message. No tool
-call ever crashes the MCP server process — failures are always surfaced as MCP-level errors.
+See [`mcp/README.md`](mcp/README.md) for full setup, env vars, and the Claude Code snippet.
 
 ## Reach from another LAN machine
 
