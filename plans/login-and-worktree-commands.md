@@ -124,14 +124,14 @@ token" link clears the stored token and re-shows the overlay. The old
 
 **Steps:**
 
-- [ ] Add overlay markup (hidden by default) + "forget token" link to the header (`public/index.html:100-111`)
-- [ ] Add overlay CSS using existing CSS custom properties and the `.hidden` convention (`:8-97`)
-- [ ] Replace `sessionStorage` reads/writes with `localStorage` under key `lpm-token` (`:117,120`); keep the hash-capture branch but write to `localStorage` and still call `history.replaceState` (`:115-119`)
-- [ ] Add `getStoredToken/setStoredToken/clearStoredToken` helpers; make `TOKEN` a mutable lookup (not a `const` snapshot) so forget/login can update it without reload
-- [ ] Add `showLoginOverlay/hideLoginOverlay/submitToken`; `submitToken` validates by fetching `/api/state` with the candidate token, rejecting on 401 (reuse the `AuthError` path at `:130,143`)
-- [ ] On load: if no stored token, show overlay and skip `tick()`; after successful submit, store token, hide overlay, start polling
-- [ ] Repoint `renderAuthError` (`:146,154-159,246`) to call `showLoginOverlay` with an error message instead of printing the paste-in-URL instructions
-- [ ] Wire the "forget token" link to `clearStoredToken` + `showLoginOverlay`
+- [x] Add overlay markup (hidden by default) + "forget token" link to the header (`public/index.html:100-111`)
+- [x] Add overlay CSS using existing CSS custom properties and the `.hidden` convention (`:8-97`)
+- [x] Replace `sessionStorage` reads/writes with `localStorage` under key `lpm-token` (`:117,120`); keep the hash-capture branch but write to `localStorage` and still call `history.replaceState` (`:115-119`)
+- [x] Add `getStoredToken/setStoredToken/clearStoredToken` helpers; make `TOKEN` a mutable lookup (not a `const` snapshot) so forget/login can update it without reload
+- [x] Add `showLoginOverlay/hideLoginOverlay/submitToken`; `submitToken` validates by fetching `/api/state` with the candidate token, rejecting on 401 (reuse the `AuthError` path at `:130,143`)
+- [x] On load: if no stored token, show overlay and skip `tick()`; after successful submit, store token, hide overlay, start polling
+- [x] Repoint `renderAuthError` (`:146,154-159,246`) to call `showLoginOverlay` with an error message instead of printing the paste-in-URL instructions
+- [x] Wire the "forget token" link to `clearStoredToken` + `showLoginOverlay`
 - [ ] *(Optional, only if it falls out cleanly with no restructuring)* If the
   token read/persist/validate trio (`getStoredToken/setStoredToken/clearStoredToken`)
   can be lifted into a tiny pure helper module that `node:test` could import,
@@ -147,31 +147,31 @@ token" link clears the stored token and re-shows the overlay. The old
 
 **Verification:**
 
-- [ ] Automated tests for this phase pass: `pnpm test` (existing suite still green — no server code touched)
-- [ ] Fresh device/profile (no `lpm-token`): overlay appears, dashboard hidden
-- [ ] Paste a valid token ⇒ overlay closes, worktrees render
-- [ ] Hard refresh ⇒ still logged in; fully close + reopen browser ⇒ still logged in (localStorage survives)
-- [ ] Paste a wrong token ⇒ overlay stays, error shown
-- [ ] Click "forget token" ⇒ overlay returns; pasting a fresh token works
-- [ ] Legacy `#token=<value>` URL ⇒ logs in, hash cleared, and persists across reopen
-- [ ] Phone on the LAN: same flow works (manual paste once, persists)
-- [ ] **Stale-token edge case:** stored `lpm-token` is present but the server has
+- [x] Automated tests for this phase pass: `pnpm test` (existing suite still green — no server code touched)
+- [x] Fresh device/profile (no `lpm-token`): overlay appears, dashboard hidden
+- [x] Paste a valid token ⇒ overlay closes, worktrees render
+- [x] Hard refresh ⇒ still logged in; fully close + reopen browser ⇒ still logged in (localStorage survives)
+- [x] Paste a wrong token ⇒ overlay stays, error shown
+- [x] Click "forget token" ⇒ overlay returns; pasting a fresh token works
+- [x] Legacy `#token=<value>` URL ⇒ logs in, hash cleared, and persists across reopen
+- [x] Phone on the LAN: same flow works (manual paste once, persists)
+- [x] **Stale-token edge case:** stored `lpm-token` is present but the server has
   rotated `token.local` ⇒ next poll gets 401 ⇒ overlay is re-shown (via
   `renderAuthError`→`showLoginOverlay`), NOT a silent failure or blank screen;
   pasting the new token recovers
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any code-reviewer-driven changes reflected back into this plan file
-- [ ] Tests for this phase written and passing — or no-tests justification accepted
-- [ ] Documentation updated (see Documentation section)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat(ui): add persistent token login overlay with forget-token link`
-- [ ] Phase marked complete
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn *(n/a — executed via /execute-prd code-reviewer subagent, not the /clear handoff workflow)*
+- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session *(n/a — see above)*
+- [x] Code-reviewer agent has verified this phase *(green; commits `defcc97`, `7d73156`)*
+- [x] Any code-reviewer-driven changes reflected back into this plan file *(stale-token interval nit fixed in code, commit `75eb3cf`; no plan change needed)*
+- [x] Tests for this phase written and passing — or no-tests justification accepted *(no-tests justification accepted; existing suite 41/0)*
+- [x] Documentation updated (see Documentation section) *(login-overlay docs deferred to Phase 3 per Documentation table — not required this phase)*
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `feat(ui): add persistent token login overlay with forget-token link`
+- [x] Phase marked complete
 
 ---
 
