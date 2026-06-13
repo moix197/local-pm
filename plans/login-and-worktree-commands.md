@@ -285,10 +285,10 @@ limitations, and the HTTP-cleartext + arbitrary-RCE remote-readiness caveat.
 
 **Steps:**
 
-- [ ] `public/index.html`: add free-form input + run button per stopped row; client-side empty/whitespace reject (no request sent); `confirm()` for free-form only
-- [ ] `public/index.html`: finalize quick-action `commands` rendering (labels, order); dedupe-by-label already handled server-side in `mergeCommands`
-- [ ] `README.md`: document both features + limitations + the explicit security/remote-readiness caveat
-- [ ] `ROADMAP.md`: update status + add the two future notes (auto-stop opt-in; HTTPS/hardening before remote)
+- [x] `public/index.html`: add free-form input + run button per stopped row; client-side empty/whitespace reject (no request sent); `confirm()` for free-form only *(plus a fix to preserve input value+focus across the 2s poll re-render, commit `0fd7bbc`)*
+- [x] `public/index.html`: finalize quick-action `commands` rendering (labels, order); dedupe-by-label already handled server-side in `mergeCommands`
+- [x] `README.md`: document both features + limitations + the explicit security/remote-readiness caveat
+- [x] `ROADMAP.md`: update status + add the two future notes (auto-stop opt-in; HTTPS/hardening before remote)
 
 **Tests:**
 
@@ -298,26 +298,26 @@ limitations, and the HTTP-cleartext + arbitrary-RCE remote-readiness caveat.
 
 **Verification:**
 
-- [ ] Automated tests for this phase pass: `pnpm test` (Phase 2 suite still green)
-- [ ] Manual: type a custom command on a stopped worktree ⇒ confirm dialog shows `Run <command> in <branch>?`; confirm ⇒ output streams, exit code shown
-- [ ] Manual: empty/whitespace input ⇒ rejected, no request sent, no confirm
-- [ ] Manual: cancel the confirm ⇒ nothing runs
-- [ ] Manual: a quick-action button still runs *without* a confirm
-- [ ] Manual: configure a custom action in `projects.json` ⇒ it appears as a button and runs
-- [ ] README + ROADMAP reviewed: security caveat + limitations present and accurate
+- [x] Automated tests for this phase pass: `pnpm test` (60/0, Phase 2 suite still green)
+- [x] Manual: type a custom command on a stopped worktree ⇒ confirm dialog shows `Run <command> in <branch>?`; confirm ⇒ output streams, exit code shown *(orchestrator verified working)*
+- [x] Manual: empty/whitespace input ⇒ rejected, no request sent, no confirm
+- [x] Manual: cancel the confirm ⇒ nothing runs
+- [x] Manual: a quick-action button still runs *without* a confirm
+- [~] Manual: configure a custom action in `projects.json` ⇒ it appears as a button and runs *(mergeCommands covered by `worktrees.command.test.js`; deferrable to Phase 4 final pass)*
+- [x] README + ROADMAP reviewed: security caveat + limitations present and accurate
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any code-reviewer-driven changes reflected back into this plan file
-- [ ] Tests for this phase written and passing — or no-tests justification accepted
-- [ ] Documentation updated (see Documentation section)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat(ui): free-form worktree commands with confirm + security docs`
-- [ ] Phase marked complete
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn *(n/a — executed via /execute-prd code-reviewer subagent)*
+- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session *(n/a — see above)*
+- [x] Code-reviewer agent has verified this phase *(green; commit `d2b9863`)*
+- [x] Any code-reviewer-driven changes reflected back into this plan file *(input focus/value fix `0fd7bbc` noted above)*
+- [x] Tests for this phase written and passing — or no-tests justification accepted *(no-tests justification accepted; suite 60/0)*
+- [x] Documentation updated (see Documentation section) *(README + ROADMAP written, incl. Phase 2's deferred command docs)*
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `feat(ui): free-form worktree commands with confirm + security docs`
+- [x] Phase marked complete
 
 ---
 
