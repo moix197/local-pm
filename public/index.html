@@ -69,6 +69,18 @@
       button.start { border-color: var(--accent); }
       button.stop { border-color: var(--red); color: var(--red); }
       button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .cmd-form { display: flex; gap: 6px; flex-shrink: 0; }
+      .cmd-form input[type="text"] {
+        font: inherit;
+        padding: 4px 8px;
+        background: #010409;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        width: 180px;
+      }
+      .cmd-form input[type="text"]:focus { outline: none; border-color: var(--accent); }
+      .cmd-form input[type="text"]:disabled { opacity: 0.5; }
       .logs {
         margin-top: 24px;
       }
@@ -311,9 +323,33 @@
         return btn;
       }
 
+      function makeFreeFormInput(w, busy) {
+        const form = document.createElement('div');
+        form.className = 'cmd-form';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'custom command…';
+        input.disabled = busy;
+        const btn = document.createElement('button');
+        btn.textContent = 'Run';
+        btn.disabled = busy;
+        function runFreeForm() {
+          const value = input.value.trim();
+          if (!value) return;
+          if (!confirm('Run ' + value + ' in ' + w.branch + '?')) return;
+          post('/api/command', { path: w.path, cmd: value, label: value });
+        }
+        btn.onclick = runFreeForm;
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') runFreeForm(); });
+        form.appendChild(input);
+        form.appendChild(btn);
+        return form;
+      }
+
       function makeRow(w, status, busy) {
         const isActive = status.active && status.active.path === w.path;
         const cmdRunning = status.command && status.command.status === 'running';
+        const controlsBusy = busy || cmdRunning;
         const row = document.createElement('div');
         row.className = 'row' + (isActive ? ' active' : '');
         row.innerHTML =
@@ -329,9 +365,10 @@
           btn.className = 'start';
           btn.textContent = 'Start';
           btn.onclick = () => post('/api/start', { path: w.path });
-          for (const c of w.commands ?? []) row.appendChild(makeCommandButton(w, c, busy || cmdRunning));
+          for (const c of w.commands ?? []) row.appendChild(makeCommandButton(w, c, controlsBusy));
+          row.appendChild(makeFreeFormInput(w, controlsBusy));
         }
-        btn.disabled = busy || cmdRunning;
+        btn.disabled = controlsBusy;
         row.appendChild(btn);
         return row;
       }

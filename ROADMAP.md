@@ -81,6 +81,22 @@ click-through LAN URL, optional log drawer. Vanilla JS, no build.
 Auto-start on Windows boot (Task Scheduler / nssm / pm2) so the dashboard is always
 reachable when you remote in.
 
+## Phase 6 — Token login overlay + persistent auth  *(done)*
+
+Login overlay shown when no token is stored. Token validated on submit, persisted to
+`localStorage` — paste once per device, survives browser restarts. "Forget token" link
+clears it and re-shows the overlay. Stale-token mid-session triggers the overlay
+automatically on the next poll. Legacy `#token=` URL still works and also persists.
+
+## Phase 7 — Run commands in a worktree  *(done)*
+
+Quick-action buttons (`npm install`, `npm run build`, `npm run lint`) on every stopped
+worktree row. Per-project custom commands via `commands` array in `projects.json`
+(strings or `{label,cmd}` objects, extend defaults, project wins on label collision).
+Free-form command input with a confirmation dialog. Command output streams to the shared
+log panel; green/red banner shows exit code. Stop-command button kills a running command.
+Single-operation guard reused — commands and server start/stop are serialized.
+
 ---
 
 ## Deferred (post-V1)
@@ -89,12 +105,20 @@ reachable when you remote in.
   per worktree in the UI.
 - **Extract git-wt programmatic API** (`exports` + importable `core/`), replacing the
   `list --json` shell-out.
-- **Auth** on the dashboard — required before any tunnel exposes docker control
-  beyond the trusted LAN.
+- **Auto-stop server before running a command** (config opt-in): optionally stop the
+  running server automatically before executing a command, then optionally restart it
+  after — useful for commands that need the port free.
+- **HTTPS / self-signed cert + hardening before any remote exposure.** The dashboard
+  runs over HTTP cleartext with a single Bearer token as the only boundary. It executes
+  arbitrary shell commands on the host. This is acceptable for solo/LAN use. It MUST get
+  HTTPS (self-signed or real cert), a stricter auth model, and a hardening review before
+  being exposed to any network outside the trusted LAN.
 
 ## Security note
 
-Binding `0.0.0.0` gives anyone on the LAN start/stop control over your Docker stacks.
-Acceptable on a trusted home network for V1; **must** add auth before Phase = ngrok.
+Binding `0.0.0.0` gives anyone on the LAN start/stop control over your Docker stacks,
+and (as of Phase 7) the ability to run arbitrary shell commands on the host. The Bearer
+token is the sole authentication boundary. Acceptable on a trusted home network;
+**must** add HTTPS + hardening before any remote/non-LAN exposure.
 </content>
 </invoke>

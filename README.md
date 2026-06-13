@@ -65,10 +65,17 @@ Subsequent starts print a masked line instead — safe to capture in a log file:
 If you lose the value, read it from `token.local` directly. Delete the file to rotate it
 (a new one is generated on next start).
 
-**Browser:** open `http://localhost:7420/#token=<value>`. The page reads the token from
-the URL fragment, stores it in `sessionStorage`, and strips the fragment from the URL bar.
-Open `GET /` without a token and the page loads but shows an "add your token" message in
-place of the project list.
+**Browser login overlay:** Opening the dashboard without a stored token shows a login
+overlay. Paste the token once and click **Log in** — the token is validated against the
+server and stored in `localStorage` under the key `lpm-token`. It persists across browser
+refreshes and full browser restarts, so you paste once per device, not once per session.
+A wrong token keeps the overlay visible with an error. Click **forget token** in the
+header to clear the stored token and return to the overlay (useful when the server rotates
+its token). If the stored token becomes stale mid-session (e.g. `token.local` was
+deleted), the next poll returns 401 and the overlay re-appears automatically.
+
+**Legacy URL fragment:** `http://localhost:7420/#token=<value>` still works — the page
+reads the token, writes it to `localStorage`, and strips the fragment from the URL bar.
 
 **curl:** pass the token as a bearer header.
 
@@ -83,6 +90,98 @@ curl -X POST -H "Authorization: Bearer <token>" http://localhost:7420/api/stop
 ```
 
 Without a valid token these endpoints return `401 {"error":"Unauthorized"}`.
+
+## Running commands in a worktree
+
+On a **stopped** worktree each row shows command controls — only available when no server
+is running for that worktree (a running server returns 409 and the UI disables the
+controls).
+
+### Quick-action buttons
+
+Three default buttons appear on every stopped worktree row:
+
+| Button | Command run |
+|---|---|
+| `npm install` | `npm install` |
+| `npm run build` | `npm run build` |
+| `npm run lint` | `npm run lint` |
+
+Clicking a quick-action runs immediately — **no confirmation dialog**.
+
+### Per-project custom commands
+
+Add a `commands` array to any project entry in `projects.json`:
+
+```json
+[
+  {
+    "name": "my-project",
+    "root": "C:/path/to/your/project",
+    "commands": [
+      "npm run typecheck",
+      { "label": "DB migrate", "cmd": "npm run db:migrate" }
+    ]
+  }
+]
+```
+
+Each entry is either a plain string (used as both label and command) or a
+`{ "label": "…", "cmd": "…" }` object. Per-project commands **extend** the three
+defaults — they appear after them. If a project entry has the same label as a default,
+the project's version wins (override semantics).
+
+### Free-form command input
+
+Each stopped worktree row also has a text box. Type any shell command and press
+**Enter** or click **Run**. Empty or whitespace-only input is rejected client-side
+without sending a request. A confirmation dialog appears before the command runs:
+
+```
+Run <command> in <branch>?
+```
+
+On confirm the command runs and streams output to the logs panel exactly like a
+quick-action.
+
+### Command output and the shared log buffer
+
+Output streams into the existing logs panel (last ~300 combined lines). The header line
+is `[cmd] <label>`, followed by stdout/stderr, then a footer `[cmd] exited <code>`. A
+green `✓ (exit 0)` or red `✗ (exit N)` banner shows the result at the top of the page.
+
+The 300-line buffer is shared between server logs and command output — a noisy command
+will churn it and push out earlier server logs. Accepted trade-off for the LAN tool.
+
+### Stop command
+
+While a command is running a **Stop command** button appears in the banner. Clicking it
+kills the command process tree (`taskkill /T /F` on Windows) and marks the command
+failed. Controls re-enable after the command exits or is stopped.
+
+### Known limitation — interactive commands
+
+A command that waits on stdin (e.g. a prompt, `npm init`, etc.) will **hang** and never
+exit on its own. Use **Stop command** to kill it. There is no interactive stdin support.
+
+## Security caveat
+
+> **Read this before exposing the dashboard beyond your local machine.**
+
+local-pm is a **LAN-only, single-user tool** designed for trusted home/office networks:
+
+- **Token-gated only.** All `/api/*` routes require a Bearer token. That is the sole
+  authentication boundary — there is no second factor, no IP allowlist, no rate limit.
+- **HTTP cleartext.** Traffic between your browser and the server is unencrypted. Anyone
+  on the same network can intercept the token and replay it.
+- **Arbitrary RCE by design.** The free-form command box and the quick-action buttons
+  execute shell commands directly on the host machine (`spawn(cmd, { shell: true })`),
+  with the server process's full environment and privileges. This is intentional for a
+  local developer tool and is what makes it useful.
+
+**Acceptable for solo/LAN use. You MUST add HTTPS (self-signed or a real cert) and
+review hardening before exposing the dashboard to any network you do not fully trust.**
+See ROADMAP for the planned hardening item.
 
 ## Run as a background service
 
@@ -159,3 +258,7 @@ contains invalid JSON, startup fails with a descriptive error
 - `docker compose down` is run on stop; its errors are ignored so worktrees without a
   compose file still stop cleanly.
 - Windows-specific: uses `npm.cmd`, `taskkill`, and `shell: true` for `.cmd` resolution.
+- **Commands block the server.** The single-operation guard means you cannot start a
+  server while a command is running, and vice versa.
+- **No interactive stdin.** Commands waiting on user input hang until stopped manually
+  (see [Stop command](#stop-command) above).
