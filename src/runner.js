@@ -9,7 +9,49 @@ const LOG_LIMIT = 300;
 
 let active = null;
 let installing = false;
+let inProgress = false;
 const logs = [];
+
+// ---------------------------------------------------------------------------
+// Injectable seams — replaced in unit tests; defaults are production impls.
+// ---------------------------------------------------------------------------
+
+let _spawn = spawn;
+
+/** @internal — unit tests only */
+export function _setSpawnFn(fn) { _spawn = fn; }
+
+// Production kill: use taskkill /T /F on Windows
+async function _defaultKill(pid) {
+  try {
+    await execFileAsync('taskkill', ['/PID', String(pid), '/T', '/F']);
+  } catch {
+    /* process may already be gone */
+  }
+}
+
+let _killFn = _defaultKill;
+
+/** @internal — unit tests only */
+export function _setKillFn(fn) { _killFn = fn; }
+
+// Production docker stop
+async function _defaultDockerDown(cwd) {
+  try {
+    await execFileAsync('docker', ['compose', 'down'], { cwd });
+  } catch {
+    /* worktree may have no compose file */
+  }
+}
+
+let _dockerDownFn = _defaultDockerDown;
+
+/** @internal — unit tests only */
+export function _setDockerDownFn(fn) { _dockerDownFn = fn; }
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
 
 function appendLog(line) {
   logs.push(line);
@@ -28,7 +70,7 @@ function streamToLog(stream) {
 function runNpmInstall(worktreePath) {
   return new Promise((resolve) => {
     appendLog('[local-pm] installing dependencies…');
-    const child = spawn('npm.cmd', ['install'], { cwd: worktreePath, shell: true });
+    const child = _spawn('npm.cmd', ['install'], { cwd: worktreePath, shell: true });
     streamToLog(child.stdout);
     streamToLog(child.stderr);
     child.on('close', () => resolve());
@@ -40,9 +82,8 @@ function runNpmInstall(worktreePath) {
 }
 
 function spawnDevServer(worktreePath, meta) {
-  const child = spawn('npm.cmd', ['run', 'dev'], { cwd: worktreePath, shell: true });
-  streamToLog(child.stdout);
-  streamToLog(child.stderr);
+  const child = _spawn('npm.cmd', ['run', 'dev'], { cwd: worktreePath, shell: true });
+  // child.pid is the shell (cmd.exe) PID on Windows with shell:true — assigned synchronously
   active = {
     project: meta?.project ?? null,
     branch: meta?.branch ?? null,
@@ -51,42 +92,48 @@ function spawnDevServer(worktreePath, meta) {
     startedAt: Date.now(),
   };
   appendLog(`[local-pm] dev server started (pid ${child.pid}) at ${worktreePath}`);
+  streamToLog(child.stdout);
+  streamToLog(child.stderr);
+  child.on('close', () => {
+    if (active && active.path === worktreePath) {
+      appendLog(`[local-pm] dev server exited at ${worktreePath}`);
+      active = null;
+    }
+  });
 }
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 export async function startServer(worktreePath, meta) {
-  if (active) await stopServer();
-  if (!fs.existsSync(path.join(worktreePath, 'node_modules'))) {
-    installing = true;
-    await runNpmInstall(worktreePath);
-    installing = false;
+  // Guard: reject concurrent starts (e.g. rapid double-click)
+  if (inProgress) return getStatus();
+  inProgress = true;
+  try {
+    if (active) await stopServer();
+    if (!fs.existsSync(path.join(worktreePath, 'node_modules'))) {
+      installing = true;
+      try {
+        await runNpmInstall(worktreePath);
+      } finally {
+        installing = false;
+      }
+    }
+    spawnDevServer(worktreePath, meta);
+  } finally {
+    inProgress = false;
   }
-  spawnDevServer(worktreePath, meta);
   return getStatus();
-}
-
-async function killProcessTree(pid) {
-  try {
-    await execFileAsync('taskkill', ['/PID', String(pid), '/T', '/F']);
-  } catch {
-    /* process may already be gone */
-  }
-}
-
-async function dockerComposeDown(cwd) {
-  try {
-    await execFileAsync('docker', ['compose', 'down'], { cwd });
-  } catch {
-    /* worktree may have no compose file */
-  }
 }
 
 export async function stopServer() {
   if (!active) return getStatus();
   const stopped = active;
-  await killProcessTree(stopped.pid);
-  await dockerComposeDown(stopped.path);
   active = null;
   installing = false;
+  await _killFn(stopped.pid);
+  await _dockerDownFn(stopped.path);
   appendLog(`[stopped] ${stopped.path} (pid ${stopped.pid})`);
   return getStatus();
 }
