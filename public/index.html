@@ -276,6 +276,21 @@
 
       function renderBanner(status) {
         const banner = document.getElementById('banner');
+        const c = status.command;
+        if (c) {
+          banner.classList.remove('hidden');
+          if (c.status === 'running') {
+            banner.innerHTML = `Running command: ${c.label}… ` +
+              `<button class="stop" id="stopCmdBtn">Stop command</button>`;
+            banner.querySelector('#stopCmdBtn').onclick = () => post('/api/command/stop');
+            return;
+          }
+          const ok = c.exitCode === 0;
+          banner.innerHTML =
+            `<span style="color:var(--${ok ? 'green' : 'red'})">` +
+            `${ok ? '✓' : '✗'} ${c.label} (exit ${c.exitCode})</span>`;
+          return;
+        }
         if (status.installing) {
           banner.textContent = 'Installing dependencies…';
           banner.classList.remove('hidden');
@@ -288,8 +303,17 @@
         }
       }
 
+      function makeCommandButton(w, c, busy) {
+        const btn = document.createElement('button');
+        btn.textContent = c.label;
+        btn.onclick = () => post('/api/command', { path: w.path, cmd: c.cmd, label: c.label });
+        btn.disabled = busy;
+        return btn;
+      }
+
       function makeRow(w, status, busy) {
         const isActive = status.active && status.active.path === w.path;
+        const cmdRunning = status.command && status.command.status === 'running';
         const row = document.createElement('div');
         row.className = 'row' + (isActive ? ' active' : '');
         row.innerHTML =
@@ -305,8 +329,9 @@
           btn.className = 'start';
           btn.textContent = 'Start';
           btn.onclick = () => post('/api/start', { path: w.path });
+          for (const c of w.commands ?? []) row.appendChild(makeCommandButton(w, c, busy || cmdRunning));
         }
-        btn.disabled = busy;
+        btn.disabled = busy || cmdRunning;
         row.appendChild(btn);
         return row;
       }

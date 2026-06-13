@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadProjects } from '../config.js';
+import { loadProjects, normalizeCommands } from '../config.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const projectsFile = path.join(repoRoot, 'projects.json');
@@ -58,4 +58,33 @@ test('loadProjects: throws a descriptive error on malformed JSON', () => {
     fs.writeFileSync(projectsFile, '{ not valid json', 'utf8');
     assert.throws(loadProjects, /^Error: projects\.json is not valid JSON: /);
   });
+});
+
+test('loadProjects: surfaces commands (passthrough) and defaults to []', () => {
+  withProjectsFile(() => {
+    fs.writeFileSync(
+      projectsFile,
+      JSON.stringify([
+        { name: 'with', root: repoRoot, commands: ['npm test', { label: 'fmt', cmd: 'npm run fmt' }] },
+        { name: 'without', root: repoRoot },
+      ]) + '\n',
+      'utf8',
+    );
+    const projects = loadProjects();
+    assert.deepEqual(projects[0].commands, [
+      { label: 'npm test', cmd: 'npm test' },
+      { label: 'fmt', cmd: 'npm run fmt' },
+    ]);
+    assert.deepEqual(projects[1].commands, []);
+  });
+});
+
+test('normalizeCommands: throws on malformed commands', () => {
+  assert.throws(() => normalizeCommands('npm test'), /must be an array/);
+  assert.throws(() => normalizeCommands([{ label: 'x' }]), /must be a string or a/);
+  assert.throws(() => normalizeCommands([42]), /must be a string or a/);
+});
+
+test('normalizeCommands: absent value yields []', () => {
+  assert.deepEqual(normalizeCommands(undefined), []);
 });

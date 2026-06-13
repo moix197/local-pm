@@ -10,6 +10,7 @@ const LOG_LIMIT = 300;
 let active = null;
 let installing = false;
 let inProgress = false;
+let command = null;
 const logs = [];
 
 // ---------------------------------------------------------------------------
@@ -131,6 +132,41 @@ function spawnDevServer(worktreePath, meta) {
   });
 }
 
+function spawnCommand(worktreePath, label, cmd) {
+  appendLog('[cmd] ' + label);
+  const child = _spawn(cmd, { cwd: worktreePath, shell: true });
+  command = {
+    cwd: worktreePath,
+    label,
+    pid: child.pid,
+    startedAt: Date.now(),
+    status: 'running',
+    exitCode: null,
+  };
+  streamToLog(child.stdout);
+  streamToLog(child.stderr);
+  child.on('close', (code) => finalizeCommand(code));
+  child.on('error', (err) => failCommand(err));
+}
+
+function finalizeCommand(code) {
+  appendLog(`[cmd] exited ${code}`);
+  if (command) {
+    command.exitCode = code;
+    command.status = code === 0 ? 'done' : 'failed';
+  }
+  inProgress = false;
+}
+
+function failCommand(err) {
+  appendLog(`[cmd] error: ${err.message}`);
+  if (command) {
+    command.status = 'failed';
+    command.exitCode = command.exitCode ?? null;
+  }
+  inProgress = false;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -175,8 +211,27 @@ export async function stopServer() {
   return getStatus();
 }
 
+export async function runCommand(worktreePath, { cmd, label }) {
+  if (inProgress) return getStatus();
+  if (command && command.status === 'running') {
+    appendLog('[cmd] a command is already running');
+    return getStatus();
+  }
+  inProgress = true;
+  spawnCommand(worktreePath, label, cmd);
+  return getStatus();
+}
+
+export function stopCommand() {
+  if (!command || command.status !== 'running') return getStatus();
+  _killFn(command.pid);
+  command.status = 'failed';
+  inProgress = false;
+  return getStatus();
+}
+
 export function getStatus() {
-  return { active, installing };
+  return { active, installing, command };
 }
 
 export function getLogs() {

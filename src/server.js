@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getWorktrees } from './worktrees.js';
-import { startServer, stopServer, getStatus, getLogs } from './runner.js';
+import { startServer, stopServer, runCommand, stopCommand, getStatus, getLogs } from './runner.js';
 import { getLanIPv4 } from './netinfo.js';
 import { ensureToken, isAuthorized } from './token.js';
 
@@ -70,6 +70,24 @@ async function handleStop(res) {
   sendJson(res, 200, getStatus());
 }
 
+async function handleCommand(req, res) {
+  const { path: worktreePath, cmd, label } = await readJsonBody(req);
+  if (!worktreePath || !cmd) return sendJson(res, 400, { error: 'path and cmd are required' });
+  const worktrees = await getWorktrees();
+  const known = worktrees.find((w) => w.path === worktreePath);
+  if (!known || !fs.existsSync(worktreePath)) {
+    return sendJson(res, 400, { error: `unknown or missing worktree path: ${worktreePath}` });
+  }
+  if (getStatus().active) return sendJson(res, 409, { error: 'stop the server first' });
+  await runCommand(worktreePath, { cmd, label: label ?? cmd });
+  sendJson(res, 200, getStatus());
+}
+
+function handleStopCommand(res) {
+  stopCommand();
+  sendJson(res, 200, getStatus());
+}
+
 async function route(req, res) {
   const { method } = req;
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -80,19 +98,24 @@ async function route(req, res) {
   if (method === 'GET' && url.pathname === '/api/state') return handleState(res);
   if (method === 'POST' && url.pathname === '/api/start') return handleStart(req, res);
   if (method === 'POST' && url.pathname === '/api/stop') return handleStop(res);
+  if (method === 'POST' && url.pathname === '/api/command') return handleCommand(req, res);
+  if (method === 'POST' && url.pathname === '/api/command/stop') return handleStopCommand(res);
   sendJson(res, 404, { error: 'not found' });
 }
 
-const server = http.createServer((req, res) => {
+export const server = http.createServer((req, res) => {
   route(req, res).catch((err) => sendJson(res, 500, { error: err.message }));
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  const lanIp = getLanIPv4();
-  console.log(`local-pm listening`);
-  console.log(`  local: http://localhost:${PORT}`);
-  console.log(`  LAN:   http://${lanIp}:${PORT}`);
-  const { token, isNew } = ensureToken();
-  if (isNew) console.log(`  token: ${token}`);
-  else console.log(`  auth token loaded from token.local`);
-});
+// Only bind the port when run as the entry point; importing for tests must not listen.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  server.listen(PORT, '0.0.0.0', () => {
+    const lanIp = getLanIPv4();
+    console.log(`local-pm listening`);
+    console.log(`  local: http://localhost:${PORT}`);
+    console.log(`  LAN:   http://${lanIp}:${PORT}`);
+    const { token, isNew } = ensureToken();
+    if (isNew) console.log(`  token: ${token}`);
+    else console.log(`  auth token loaded from token.local`);
+  });
+}

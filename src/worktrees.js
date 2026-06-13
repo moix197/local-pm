@@ -31,12 +31,32 @@ export function parseWorktreePorcelain(stdout) {
   return entries;
 }
 
+const DEFAULT_COMMANDS = [
+  { label: 'npm install', cmd: 'npm install' },
+  { label: 'npm run build', cmd: 'npm run build' },
+  { label: 'npm run lint', cmd: 'npm run lint' },
+];
+
+/**
+ * Merge a project's `commands` onto the defaults (EXTENDS semantics): start from
+ * DEFAULT_COMMANDS, append the project's commands, then dedupe by `label` with the
+ * project entry winning on collision.
+ * @param {Array<{ label: string, cmd: string }>} [projectCommands]
+ * @returns {Array<{ label: string, cmd: string }>}
+ */
+export function mergeCommands(projectCommands = []) {
+  const byLabel = new Map();
+  for (const c of [...DEFAULT_COMMANDS, ...projectCommands]) byLabel.set(c.label, c);
+  return [...byLabel.values()];
+}
+
 function toWorktree(project, entry) {
   return {
     project: project.name,
     branch: entry.branch,
     path: entry.path,
     hasNodeModules: fs.existsSync(path.join(entry.path, 'node_modules')),
+    commands: mergeCommands(project.commands),
   };
 }
 
