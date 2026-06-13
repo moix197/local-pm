@@ -330,6 +330,7 @@
         input.type = 'text';
         input.placeholder = 'custom command…';
         input.disabled = busy;
+        input.dataset.cmdPath = w.path;
         const btn = document.createElement('button');
         btn.textContent = 'Run';
         btn.disabled = busy;
@@ -373,8 +374,30 @@
         return row;
       }
 
+      function captureFocusedFreeForm(container) {
+        const el = document.activeElement;
+        if (!el || !el.dataset || !el.dataset.cmdPath) return null;
+        if (!container.contains(el)) return null;
+        return {
+          path: el.dataset.cmdPath,
+          value: el.value,
+          start: el.selectionStart,
+          end: el.selectionEnd,
+        };
+      }
+
+      function restoreFocusedFreeForm(container, saved) {
+        if (!saved) return;
+        const el = container.querySelector(`[data-cmd-path="${CSS.escape(saved.path)}"]`);
+        if (!el) return;
+        el.value = saved.value;
+        el.focus();
+        if (saved.start != null) el.setSelectionRange(saved.start, saved.end);
+      }
+
       function renderProjects(state, busy) {
         const container = document.getElementById('projects');
+        const focused = captureFocusedFreeForm(container);
         container.innerHTML = '';
         for (const [project, worktrees] of groupByProject(state.worktrees)) {
           const section = document.createElement('div');
@@ -385,6 +408,7 @@
           for (const w of worktrees) section.appendChild(makeRow(w, state.status, busy));
           container.appendChild(section);
         }
+        restoreFocusedFreeForm(container, focused);
       }
 
       function renderLogs(logs) {
