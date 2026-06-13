@@ -1,0 +1,100 @@
+# local-pm — Roadmap
+
+A lightweight, LAN-accessible local dashboard to view and control Docker servers
+across git worktrees for **all** projects. Lives in `local_pm`, consumes `git-wt`,
+runs as a background daemon on the desktop.
+
+## North star
+
+One local daemon serving a web dashboard on the home network. It lists every
+configured project and its worktrees, shows each worktree's Docker status, and
+lets you start / stop / restart a worktree's stack from the browser — including
+from a remote Claude Code session on the same network. Multiple worktrees can run
+at once on distinct ports. Outside-network (ngrok) access is deferred.
+
+## Design decisions (locked)
+
+- **Separate tool**, not folded into git-wt. git-wt = stateless worktree-lifecycle
+  CLI that deliberately does **not** run docker. local-pm = persistent web+docker
+  daemon. Dependency flows one way: `local-pm → git-wt`.
+- **Lightweight stack**, mirroring git-wt: TypeScript + tsup, Node 22, `node:http`
+  only (no web framework), near-zero deps. Frontend is a single static HTML page +
+  vanilla JS — no React, no build step for the UI.
+- **All projects, configurable** from day one (config file + worktree discovery).
+- **LAN-only for V1.** ngrok/tunnel management deferred.
+- **Consume git-wt via `git-wt list --json`** for V1; extract a programmatic API later.
+
+## Architecture
+
+- **Backend**: Node + TS, `node:http`. Shells out to `docker compose` and `git-wt`.
+- **Worktree/port data**: `git-wt list --json` per project.
+- **Docker control**: `docker compose -p <project> ... up -d | down | ps | logs`.
+- **Live status**: short polling or SSE.
+- **Frontend**: one static HTML file + vanilla JS.
+- **Config**: `projects.json` listing project roots; auto-discover worktrees and
+  which have a compose file.
+- **Binding**: `0.0.0.0:<port>` so other LAN machines reach it.
+
+---
+
+## Phase 0 — Make worktrees independently runnable  *(git-wt config — prerequisite)*
+
+Root cause: all `web_template` worktrees share `COMPOSE_PROJECT_NAME=web-template`
+and host ports 3000/4001 → collision. The compose file already supports isolation
+(parameterized names + ports, no hardcoded `name:`). Fix `web_template/.git-wt.json`:
+
+- `env.unique`: `{ "COMPOSE_PROJECT_NAME": "{repo}-{branch}" }`
+- `ports.envVars`: add `APP_PORT`, `WS_HOST_PORT` (the host-published ports the
+  compose file actually reads).
+- `preRemove`: `["docker compose -p {repo}-{branch} down -v"]`
+
+Backfill existing worktrees' `.env` with their unique name + ports. **Exit test:**
+two worktrees `up -d` at the same time, both reachable on different ports.
+
+## Phase 1 — git-wt JSON surface
+
+Add `git-wt list --json` emitting structured records per worktree: branch, path,
+isMain, allocated port(s), `COMPOSE_PROJECT_NAME`, has-compose flag. Small, in-scope
+addition to git-wt's public surface.
+
+## Phase 2 — Dashboard backend (read-only)
+
+- Config loader + project discovery.
+- `GET /api/projects` → projects → worktrees (from `git-wt list --json`) joined with
+  live Docker status (`docker compose ps` / `docker ps`).
+- Status polling endpoint.
+- LAN binding, single configurable port.
+
+## Phase 3 — Control actions
+
+- `POST` start / stop / restart per worktree → `docker compose -p <name> up -d | down`.
+- Surface each running worktree's LAN URL: `http://<desktop-ip>:<host-port>`.
+- Optional: stream `docker compose logs -f` over SSE.
+
+## Phase 4 — Web UI
+
+Single page: projects → worktrees, status badges, port, start/stop/restart buttons,
+click-through LAN URL, optional log drawer. Vanilla JS, no build.
+
+## Phase 5 — Run as a background service
+
+Auto-start on Windows boot (Task Scheduler / nssm / pm2) so the dashboard is always
+reachable when you remote in.
+
+---
+
+## Deferred (post-V1)
+
+- **ngrok / cloudflared** tunnel management for outside-network access, surfaced
+  per worktree in the UI.
+- **Extract git-wt programmatic API** (`exports` + importable `core/`), replacing the
+  `list --json` shell-out.
+- **Auth** on the dashboard — required before any tunnel exposes docker control
+  beyond the trusted LAN.
+
+## Security note
+
+Binding `0.0.0.0` gives anyone on the LAN start/stop control over your Docker stacks.
+Acceptable on a trusted home network for V1; **must** add auth before Phase = ngrok.
+</content>
+</invoke>

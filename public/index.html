@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>local-pm</title>
+    <style>
+      :root {
+        --bg: #0e1116;
+        --panel: #161b22;
+        --border: #2a3038;
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --accent: #2f81f7;
+        --green: #3fb950;
+        --red: #f85149;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 14px/1.5 -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+      }
+      header h1 { margin: 0; font-size: 18px; }
+      header a { color: var(--accent); text-decoration: none; }
+      main { padding: 16px 24px; }
+      .banner {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        padding: 10px 14px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+      }
+      .banner.hidden { display: none; }
+      .project { margin-bottom: 20px; }
+      .project h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        margin-bottom: 6px;
+      }
+      .row.active { border-color: var(--green); }
+      .row .branch { font-weight: 600; min-width: 160px; }
+      .row .path { color: var(--muted); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .running { color: var(--green); font-size: 12px; white-space: nowrap; }
+      button {
+        font: inherit;
+        padding: 5px 14px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: #21262d;
+        color: var(--text);
+        cursor: pointer;
+      }
+      button.start { border-color: var(--accent); }
+      button.stop { border-color: var(--red); color: var(--red); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .logs {
+        margin-top: 24px;
+      }
+      .logs h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+      pre {
+        background: #010409;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px;
+        margin: 0;
+        height: 300px;
+        overflow: auto;
+        font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>local-pm</h1>
+      <span id="lanUrl"></span>
+    </header>
+    <main>
+      <div id="banner" class="banner hidden"></div>
+      <div id="projects"></div>
+      <div class="logs">
+        <h2>Logs</h2>
+        <pre id="logs"></pre>
+      </div>
+    </main>
+    <script type="module">
+      let inFlight = false;
+
+      async function fetchState() {
+        const res = await fetch('/api/state');
+        return res.json();
+      }
+
+      async function post(url, body) {
+        inFlight = true;
+        render(lastState, true);
+        try {
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: body ? JSON.stringify(body) : undefined,
+          });
+          lastState = await fetchState();
+        } finally {
+          inFlight = false;
+          render(lastState);
+        }
+      }
+
+      function groupByProject(worktrees) {
+        const map = new Map();
+        for (const w of worktrees) {
+          if (!map.has(w.project)) map.set(w.project, []);
+          map.get(w.project).push(w);
+        }
+        return map;
+      }
+
+      function renderBanner(status) {
+        const banner = document.getElementById('banner');
+        if (status.installing) {
+          banner.textContent = 'Installing dependencies…';
+          banner.classList.remove('hidden');
+        } else if (status.active) {
+          const a = status.active;
+          banner.textContent = `Running: ${a.branch ?? a.path} (pid ${a.pid})`;
+          banner.classList.remove('hidden');
+        } else {
+          banner.classList.add('hidden');
+        }
+      }
+
+      function makeRow(w, status, busy) {
+        const isActive = status.active && status.active.path === w.path;
+        const row = document.createElement('div');
+        row.className = 'row' + (isActive ? ' active' : '');
+        row.innerHTML =
+          `<span class="branch">${w.branch}</span>` +
+          `<span class="path" title="${w.path}">${w.path}</span>`;
+        const btn = document.createElement('button');
+        if (isActive) {
+          row.insertAdjacentHTML('beforeend', '<span class="running">● running</span>');
+          btn.className = 'stop';
+          btn.textContent = 'Stop';
+          btn.onclick = () => post('/api/stop');
+        } else {
+          btn.className = 'start';
+          btn.textContent = 'Start';
+          btn.onclick = () => post('/api/start', { path: w.path });
+        }
+        btn.disabled = busy;
+        row.appendChild(btn);
+        return row;
+      }
+
+      function renderProjects(state, busy) {
+        const container = document.getElementById('projects');
+        container.innerHTML = '';
+        for (const [project, worktrees] of groupByProject(state.worktrees)) {
+          const section = document.createElement('div');
+          section.className = 'project';
+          const h2 = document.createElement('h2');
+          h2.textContent = project;
+          section.appendChild(h2);
+          for (const w of worktrees) section.appendChild(makeRow(w, state.status, busy));
+          container.appendChild(section);
+        }
+      }
+
+      function renderLogs(logs) {
+        const pre = document.getElementById('logs');
+        const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+        pre.textContent = logs.join('\n');
+        if (atBottom) pre.scrollTop = pre.scrollHeight;
+      }
+
+      function render(state, busy = inFlight) {
+        if (!state) return;
+        document.getElementById('lanUrl').innerHTML =
+          state.status.active
+            ? `<a href="${state.lanUrl}" target="_blank">${state.lanUrl}</a>`
+            : `<span style="color:var(--muted)">dev url: ${state.lanUrl}</span>`;
+        renderBanner(state.status);
+        renderProjects(state, busy);
+        renderLogs(state.logs);
+      }
+
+      let lastState = null;
+      async function tick() {
+        if (!inFlight) {
+          lastState = await fetchState();
+          render(lastState);
+        }
+      }
+      tick();
+      setInterval(tick, 2000);
+    </script>
+  </body>
+</html>
