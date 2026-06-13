@@ -249,7 +249,7 @@ no crashes, no silent empty results. The `.mcp.json` snippet works in Claude Cod
 
 **Steps:**
 
-- [ ] Create `mcp/package.json` (no `dependencies` block yet — pnpm will add it):
+- [x] Create `mcp/package.json` (no `dependencies` block yet — pnpm will add it):
   ```json
   {
     "name": "local-pm-mcp",
@@ -259,11 +259,11 @@ no crashes, no silent empty results. The `.mcp.json` snippet works in Claude Cod
     "main": "index.js"
   }
   ```
-- [ ] Run `pnpm add @modelcontextprotocol/sdk` from inside `mcp/` — this resolves and pins
+- [x] Run `pnpm add @modelcontextprotocol/sdk` from inside `mcp/` — this resolves and pins
   the current latest version. Commit whatever exact version pnpm writes into
   `mcp/package.json` and `mcp/pnpm-lock.yaml`. Do NOT hardcode a version number in the
   plan; use whatever pnpm resolves.
-- [ ] Create `mcp/index.js`:
+- [x] Create `mcp/index.js`:
   - Resolve `repoRoot` via `import.meta.url` pointing to `mcp/` — `path.resolve(dirname, '..')` gives the repo root
   - `getToken()` helper: return `process.env.LOCAL_PM_TOKEN` if set; otherwise read
     `path.join(repoRoot, 'token.local')` and trim; throw descriptive error if neither
@@ -286,8 +286,8 @@ no crashes, no silent empty results. The `.mcp.json` snippet works in Claude Cod
     - `start_server` — param `path: string`; calls `POST /api/start` with `{ path }`; returns response JSON
     - `stop_server` — no params; calls `POST /api/stop`; returns response JSON
   - Connect to `StdioServerTransport` and start
-- [ ] Create `mcp/.gitignore` with `node_modules/`
-- [ ] Update `README.md` — "MCP adapter" section with:
+- [x] Create `mcp/.gitignore` with `node_modules/`
+- [x] Update `README.md` — "MCP adapter" section with:
   - Setup (first time): `cd mcp && pnpm add @modelcontextprotocol/sdk`
   - Setup (subsequent / after cloning): `cd mcp && pnpm install`
   - `.mcp.json` snippet for Claude Code:
@@ -330,16 +330,16 @@ env override.
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions reflected back into this plan file
-- [ ] Tests for this phase written and passing (no-tests justification accepted)
-- [ ] Documentation updated (README.md — "MCP adapter" section added)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat: MCP stdio adapter with four tools forwarding to guarded daemon`
-- [ ] Phase marked complete
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file
+- [x] Tests for this phase written and passing (no-tests justification accepted)
+- [x] Documentation updated (README.md — "MCP adapter" section added)
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `feat: MCP stdio adapter with four tools forwarding to guarded daemon`
+- [x] Phase marked complete
 
 ---
 
