@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-13
 **Branch:** main (direct — solo repo, no worktree flow)
-**Status:** not started
+**Status:** complete
 
 ## Context
 
@@ -368,22 +368,22 @@ env override.
 
 **Steps:**
 
-- [ ] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked
-- [ ] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent reviews the entire change end-to-end
-- [ ] Any changes made in response to the final code-reviewer review reflected back into this plan file
-- [ ] All tests pass: `pnpm test`
-- [ ] No CLAUDE.md invariants violated (thin `server.js` — auth/token logic in `src/token.js`; functions ≤30 lines; core zero runtime deps; `mcp/` only has the SDK dep; pnpm used throughout; reuse `sendJson`; no dead code; README updated)
-- [ ] Manual: curl smoke test without token → 401; with token → 200
-- [ ] Manual: browser token fragment flow — stores token, strips fragment, dashboard loads
-- [ ] Manual: browser 401 UX — auth-error message shown, no JS crash
-- [ ] Manual: `pnpm schedule:install` → `schtasks /query` confirms task
-- [ ] Manual: MCP tools from Claude Code drive the daemon (list, status, start, stop)
-- [ ] Manual: MCP failure paths — daemon down, wrong token, missing token.local each produce clear `isError: true` MCP responses
-- [ ] Manual: second `pnpm start` — stdout contains no token value, only the masked confirmation line
-- [ ] Overall success criteria met
-- [ ] All phase checkboxes above are ticked
+- [x] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked
+- [x] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] Code-reviewer agent reviews the entire change end-to-end
+- [x] Any changes made in response to the final code-reviewer review reflected back into this plan file
+- [x] All tests pass: `pnpm test` (38/38)
+- [x] No CLAUDE.md invariants violated (thin `server.js` — auth/token logic in `src/token.js`; functions ≤30 lines; core zero runtime deps; `mcp/` only has the SDK dep; pnpm used throughout; reuse `sendJson`; no dead code; README updated)
+- [x] Manual: curl smoke test without token → 401; with token → 200
+- [x] Manual: browser token fragment flow — stores token, strips fragment, dashboard loads
+- [x] Manual: browser 401 UX — auth-error message shown, no JS crash
+- [x] Manual: `pnpm schedule:install` → `schtasks /query` confirms task (requires elevated shell; verified by user)
+- [x] Manual: MCP tools from Claude Code drive the daemon (list, status, start, stop) — verified live via web_template (local-scope registration, `list_worktrees` returned real worktrees)
+- [x] Manual: MCP failure paths — daemon down, wrong token, missing token.local each produce clear `isError: true` MCP responses
+- [x] Manual: second `pnpm start` — stdout contains no token value, only the masked confirmation line
+- [x] Overall success criteria met
+- [x] All phase checkboxes above are ticked
 
 ---
 
