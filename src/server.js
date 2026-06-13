@@ -51,11 +51,6 @@ async function handleState(res) {
   });
 }
 
-async function findWorktreeMeta(targetPath) {
-  const match = (await getWorktrees()).find((w) => w.path === targetPath);
-  return match ? { project: match.project, branch: match.branch } : undefined;
-}
-
 async function handleStart(req, res) {
   const { path: worktreePath } = await readJsonBody(req);
   if (!worktreePath) return sendJson(res, 400, { error: 'path is required' });
