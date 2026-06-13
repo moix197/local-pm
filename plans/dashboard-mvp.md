@@ -53,6 +53,7 @@ The scope is a single-machine Node.js process. No network complexity, no databas
 - [ ] Read each existing source file; note any gap vs. spec (described above under File changes)
 - [ ] Export `parseWorktreePorcelain` from `src/worktrees.js` (currently unexported) so it can be unit-tested — keep it as a named export, not changing its behavior
 - [ ] Add malformed-JSON guard in `config.js`: wrap `JSON.parse` in try/catch, rethrow with message `"projects.json is not valid JSON: <original message>"`
+- [ ] Make the default-written `projects.json` publish-safe: write a generic placeholder (mirror `projects.example.json`) instead of a machine-specific `web_template` path, so a fresh clone doesn't ship someone else's paths
 - [ ] Verify `server.js` `handleState` returns correct shape when `active` is null and `logs` is empty
 - [ ] Confirm `pnpm start` prints both URLs (run and check stdout manually or in test)
 - [ ] Write `src/__tests__/config.test.js`: test that missing file creates default, test that existing file is read, test malformed JSON throws descriptive error (use `node:test` + `node:assert`)
