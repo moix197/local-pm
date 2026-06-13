@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "schedule:install": "node scripts/schedule-install.js",
+    "schedule:uninstall": "node scripts/schedule-uninstall.js"
   },
   "engines": {
     "node": ">=22"

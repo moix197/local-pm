@@ -80,6 +80,38 @@ curl -X POST -H "Authorization: Bearer <token>" http://localhost:7420/api/stop
 
 Without a valid token these endpoints return `401 {"error":"Unauthorized"}`.
 
+## Run as a background service
+
+To have local-pm start automatically at log-on (no terminal needed), register a Windows
+Task Scheduler task:
+
+```sh
+pnpm schedule:install
+```
+
+Remove it with:
+
+```sh
+pnpm schedule:uninstall
+```
+
+Both scripts are idempotent (delete-then-create), so re-running install never duplicates
+the task.
+
+- The task runs as the **current user in your interactive session** — required so it can
+  reach Docker Desktop (which only runs in the interactive session).
+- Task Scheduler does **not** inherit your shell environment variables. That's why the
+  auth token lives in `token.local` (read by the server at startup) rather than an env var.
+  Start the server once first (`pnpm start`) so `token.local` exists.
+- Confirm the task is registered:
+
+  ```sh
+  schtasks /query /tn local-pm
+  ```
+
+- The full at-log-on cycle must be verified **manually**: sign out, sign back in, and
+  check the dashboard loads — there's no automated test for the live Task Scheduler trigger.
+
 ## Reach from another LAN machine
 
 Open `http://<desktop-ip>:7420` from any device on the same network — the dashboard
