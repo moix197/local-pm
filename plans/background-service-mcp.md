@@ -81,7 +81,7 @@ file is listed in `.gitignore`.
 
 **Steps:**
 
-- [ ] Create `src/token.js` with three named exports:
+- [x] Create `src/token.js` with three named exports:
   - `ensureToken()` — uses `repoRoot` (same pattern as `config.js`) to resolve `token.local`;
     if file absent, generates `crypto.randomBytes(32).toString('hex')`, writes it, returns
     `{ token, isNew: true }`; if present, reads, trims, and returns `{ token, isNew: false }`
@@ -92,13 +92,13 @@ file is listed in `.gitignore`.
     using `crypto.timingSafeEqual` (handle length mismatch: if lengths differ, return `false`
     immediately without calling `timingSafeEqual` to avoid the buffer-length assertion); calls
     `readToken()` internally
-- [ ] Modify `src/server.js`:
+- [x] Modify `src/server.js`:
   - Import `{ ensureToken, isAuthorized }` from `./token.js`
   - In `route()`, insert auth guard as first check: `if (url.pathname.startsWith('/api/') && !isAuthorized(req)) return sendJson(res, 401, { error: 'Unauthorized' });`
   - In the `server.listen` callback, call `const { token, isNew } = ensureToken();` and:
     - If `isNew`: print `  token: ${token}` to stdout (full value, one-time reveal)
     - If `!isNew`: print `  auth token loaded from token.local` (no value, safe for logs)
-- [ ] Modify `public/index.html`:
+- [x] Modify `public/index.html`:
   - At top of `<script type="module">`, add token bootstrap: parse `location.hash` for
     `#token=<value>`, if found store in `sessionStorage.setItem('lpm-token', value)` then
     replace history state to strip fragment from URL bar; read token back:
@@ -110,8 +110,8 @@ file is listed in `.gitignore`.
     `document.getElementById('projects').innerHTML = '<div class="auth-error">…add your token via <code>#token=&lt;value&gt;</code> in the URL…</div>'`
   - In `tick()`, catch `AuthError` and call `renderAuthError()` instead of crashing
   - Add minimal CSS for `.auth-error` (muted color, readable message)
-- [ ] Add `token.local` to `.gitignore`
-- [ ] Write `src/__tests__/token.test.js`:
+- [x] Add `token.local` to `.gitignore`
+- [x] Write `src/__tests__/token.test.js`:
   - `isAuthorized` — valid token returns `true`; missing `Authorization` header returns
     `false`; wrong token returns `false`; `Bearer ` prefix missing returns `false`;
     token with different length than expected returns `false` (covers the `timingSafeEqual`
@@ -119,8 +119,8 @@ file is listed in `.gitignore`.
   - `ensureToken` — creates file if absent (use a temp path via `os.tmpdir()`), returns
     `isNew: true`; reads existing file, returns `isNew: false`; trims whitespace on read
   - `readToken` — throws descriptive error when file absent; returns trimmed string when present
-- [ ] Run `pnpm test` — all pass
-- [ ] Update `README.md` with "Authentication" section including curl examples and note on
+- [x] Run `pnpm test` — all pass
+- [x] Update `README.md` with "Authentication" section including curl examples and note on
   startup log behavior (value printed once on generation; masked on subsequent starts)
 
 **Tests:**
@@ -131,7 +131,7 @@ file is listed in `.gitignore`.
 
 **Verification:**
 
-- [ ] Automated tests pass: `pnpm test`
+- [x] Automated tests pass: `pnpm test`
 - [ ] Manual: `pnpm start` first run — prints `token: <full-value>` to stdout; subsequent
   `pnpm start` — prints `auth token loaded from token.local` (no token value in output)
 - [ ] Manual: `curl http://localhost:7420/api/state` returns `401`; `curl -H "Authorization: Bearer <token>" http://localhost:7420/api/state` returns `200`
@@ -140,15 +140,15 @@ file is listed in `.gitignore`.
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (README.md — "Authentication" section added)
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file
+- [x] Tests for this phase written and passing
+- [x] Documentation updated (README.md — "Authentication" section added)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat: bearer token auth guard, token-file provisioning, browser fragment flow`
+- [x] Changes committed: `feat: bearer token auth guard, token-file provisioning, browser fragment flow`
 - [ ] Phase marked complete
 
 ---
