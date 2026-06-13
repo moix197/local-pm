@@ -102,7 +102,11 @@ function spawnDevServer(worktreePath, meta) {
   });
   child.on('error', (err) => {
     appendLog(`[error] failed to start ${meta?.branch ?? worktreePath}: ${err.message}`);
+    // Explicitly reset to idle here so state is correct regardless of when
+    // 'error' fires (sync or async) relative to startServer's finally block.
     if (active && active.path === worktreePath) active = null;
+    installing = false;
+    inProgress = false;
   });
 }
 

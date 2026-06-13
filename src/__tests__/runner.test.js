@@ -350,4 +350,41 @@ describe('spawn error handling', () => {
     assert.equal(s.active, null, 'active must be null after spawn error');
     assert.equal(s.installing, false, 'installing must be false after spawn error');
   });
+
+  it('does not hang and logs the error when the install spawn emits error', async () => {
+    // First spawn (npm install) emits 'error' instead of closing; the dev
+    // spawn then also errors so we end fully idle.
+    let installChild;
+    let devChild;
+    let spawnCall = 0;
+    runner._setSpawnFn((_cmd, _args, _opts) => {
+      spawnCall += 1;
+      if (spawnCall === 1) {
+        installChild = makeChild(100, /* autoClose */ false);
+        // Resolve runNpmInstall via 'error' (not 'close') so startServer proceeds.
+        Promise.resolve().then(() =>
+          installChild.emit('error', new Error('ENOENT npm install failed')),
+        );
+        return installChild;
+      }
+      devChild = makeChild(200, /* autoClose */ false);
+      return devChild;
+    });
+
+    // startServer must resolve (install 'error' resolves the promise — no hang).
+    await assert.doesNotReject(() =>
+      runner.startServer('C:\\fake\\InstallErr', { project: 'p', branch: 'inst-branch' }),
+    );
+
+    const captured = runner.getLogs();
+    const errorLine = captured.find((l) => l.includes('npm install error'));
+    assert.ok(errorLine, `expected install error log, got: ${JSON.stringify(captured)}`);
+    assert.equal(runner.getStatus().installing, false, 'installing must be false after install error');
+
+    // Dev child then errors → state fully resets to idle.
+    devChild?.emit('error', new Error('ENOENT spawn failed'));
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(runner.getStatus().active, null, 'active must be null after errors');
+  });
 });
