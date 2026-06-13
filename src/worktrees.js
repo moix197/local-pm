@@ -9,21 +9,23 @@ const execFileAsync = promisify(execFile);
 /**
  * Parse the output of `git worktree list --porcelain` into worktree entries.
  * Handles normal branches (stripping the `refs/heads/` prefix), detached HEAD
- * (branch `(detached)`), and bare worktrees with no branch line (branch `null`).
+ * (branch `(detached)`), and bare worktrees (branch `(bare)`).
  * @param {string} stdout raw porcelain output
- * @returns {Array<{ path: string, branch: string | null }>} parsed entries
+ * @returns {Array<{ path: string, branch: string }>} parsed entries
  */
 export function parseWorktreePorcelain(stdout) {
   const entries = [];
   let current = null;
   for (const line of stdout.split('\n')) {
     if (line.startsWith('worktree ')) {
-      current = { path: line.slice('worktree '.length).trim(), branch: null };
+      current = { path: line.slice('worktree '.length).trim(), branch: '(unknown)' };
       entries.push(current);
     } else if (line.startsWith('branch ') && current) {
       current.branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '');
     } else if (line.startsWith('detached') && current) {
       current.branch = '(detached)';
+    } else if (line.startsWith('bare') && current) {
+      current.branch = '(bare)';
     }
   }
   return entries;
@@ -32,7 +34,7 @@ export function parseWorktreePorcelain(stdout) {
 function toWorktree(project, entry) {
   return {
     project: project.name,
-    branch: entry.branch ?? '(unknown)',
+    branch: entry.branch,
     path: entry.path,
     hasNodeModules: fs.existsSync(path.join(entry.path, 'node_modules')),
   };
@@ -54,11 +56,12 @@ async function getProjectWorktrees(project) {
  * Discover git worktrees across all configured projects.
  * Projects whose root does not exist (or whose `git` call fails) contribute an
  * empty list rather than throwing, so a missing project root degrades gracefully.
+ * @param {Array<{ name: string, root: string, exists: boolean }>} [projects]
+ *   project list to scan; defaults to the configured projects
  * @returns {Promise<Array<{ project: string, branch: string, path: string, hasNodeModules: boolean }>>}
  *   flattened list of worktrees across all projects
  */
-export async function getWorktrees() {
-  const projects = loadProjects();
+export async function getWorktrees(projects = loadProjects()) {
   const lists = await Promise.all(projects.map(getProjectWorktrees));
   return lists.flat();
 }

@@ -18,10 +18,10 @@ test('parseWorktreePorcelain: detached HEAD yields (detached)', () => {
   ]);
 });
 
-test('parseWorktreePorcelain: bare worktree (no branch line) yields null branch', () => {
+test('parseWorktreePorcelain: bare worktree yields (bare)', () => {
   const stdout = ['worktree C:/proyectos/app', 'bare', ''].join('\n');
   assert.deepEqual(parseWorktreePorcelain(stdout), [
-    { path: 'C:/proyectos/app', branch: null },
+    { path: 'C:/proyectos/app', branch: '(bare)' },
   ]);
 });
 
@@ -51,9 +51,32 @@ test('parseWorktreePorcelain: empty output yields empty list', () => {
   assert.deepEqual(parseWorktreePorcelain(''), []);
 });
 
-test('getWorktrees: missing project root degrades gracefully (no throw)', async () => {
-  // The placeholder projects.json points at a non-existent root, so getWorktrees
-  // must resolve to an array without throwing rather than crashing.
-  const result = await getWorktrees();
+test('getWorktrees: empty project list yields empty result', async () => {
+  assert.deepEqual(await getWorktrees([]), []);
+});
+
+test('getWorktrees: non-existent project root contributes nothing (no throw)', async () => {
+  const projects = [
+    { name: 'ghost', root: 'C:/this/path/does/not/exist', exists: false },
+  ];
+  const result = await getWorktrees(projects);
+  assert.deepEqual(result, []);
+});
+
+test('getWorktrees: groups worktrees per project and skips missing roots', async () => {
+  const projects = [
+    { name: 'present', root: 'C:/proyectos/local_pm', exists: true },
+    { name: 'absent', root: 'C:/nope', exists: false },
+  ];
+  const result = await getWorktrees(projects);
   assert.ok(Array.isArray(result));
+  // No worktree may originate from the project whose root is missing.
+  assert.ok(result.every((w) => w.project !== 'absent'));
+  // Every entry carries the expected, fully-resolved shape.
+  for (const w of result) {
+    assert.equal(w.project, 'present');
+    assert.equal(typeof w.branch, 'string');
+    assert.equal(typeof w.path, 'string');
+    assert.equal(typeof w.hasNodeModules, 'boolean');
+  }
 });
