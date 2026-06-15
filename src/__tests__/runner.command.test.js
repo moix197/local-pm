@@ -1,5 +1,8 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
 import * as runner from '../runner.js';
 
 // ---------------------------------------------------------------------------
@@ -132,5 +135,51 @@ describe('stopCommand', () => {
     runner._setKillFn(async () => { called = true; });
     runner.stopCommand();
     assert.equal(called, false, 'kill must not be called when idle');
+  });
+});
+
+describe('stopCommand stays authoritative on a late close event', () => {
+  it('keeps status failed and does not flip to done/exit 0', async () => {
+    let child;
+    runner._setSpawnFn(() => (child = makeChild(7777)));
+    runner._setKillFn(async () => {});
+
+    await runner.runCommand('C:\\fake\\wt', { cmd: 'sleep', label: 'sleep' });
+    runner.stopCommand();
+
+    // taskkill ends the process ⇒ the child's close handler fires late, and on
+    // Windows a killed process can report exit code 0.
+    child.emit('close', 0);
+
+    const s = runner.getStatus();
+    assert.equal(s.command.status, 'failed', 'stopped command must stay failed');
+    assert.notEqual(s.command.exitCode, 0, 'must not record exit 0');
+
+    // inProgress cleared exactly once ⇒ a subsequent command can spawn.
+    let spawned = false;
+    runner._setSpawnFn(() => { spawned = true; return makeChild(8888); });
+    await runner.runCommand('C:\\fake\\wt', { cmd: 'next', label: 'next' });
+    assert.ok(spawned, 'inProgress not stuck after stop + late close');
+  });
+});
+
+describe('startServer clears a stale terminal command', () => {
+  it('nulls a finished command so it cannot mask the server banner', async () => {
+    let child;
+    runner._setSpawnFn(() => (child = makeChild(4321)));
+    await runner.runCommand('C:\\fake\\wt', { cmd: 'build', label: 'build' });
+    child.emit('close', 0);
+    assert.equal(runner.getStatus().command.status, 'done', 'precondition: done');
+
+    // Temp dir with node_modules so startServer skips install and spawns dev.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-pm-cmd-'));
+    fs.mkdirSync(path.join(tmpDir, 'node_modules'));
+    try {
+      runner._setSpawnFn(() => makeChild(5432));
+      await runner.startServer(tmpDir, { project: 'p', branch: 'b' });
+      assert.equal(runner.getStatus().command, null, 'stale command cleared');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

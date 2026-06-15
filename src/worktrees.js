@@ -78,7 +78,7 @@ async function getProjectWorktrees(project) {
  * empty list rather than throwing, so a missing project root degrades gracefully.
  * @param {Array<{ name: string, root: string, exists: boolean }>} [projects]
  *   project list to scan; defaults to the configured projects
- * @returns {Promise<Array<{ project: string, branch: string, path: string, hasNodeModules: boolean }>>}
+ * @returns {Promise<Array<{ project: string, branch: string, path: string, hasNodeModules: boolean, commands: Array<{label:string,cmd:string}> }>>}
  *   flattened list of worktrees across all projects
  */
 export async function getWorktrees(projects = loadProjects()) {

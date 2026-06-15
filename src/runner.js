@@ -80,6 +80,13 @@ function appendLog(line) {
   if (logs.length > LOG_LIMIT) logs.splice(0, logs.length - LOG_LIMIT);
 }
 
+// Drop a finished (done/failed/stopped) command so its banner doesn't mask the
+// server status banner once a server op begins. A running command is left alone
+// (it's already blocked by the busy guard).
+function clearTerminalCommand() {
+  if (command && command.status !== 'running') command = null;
+}
+
 function streamToLog(stream) {
   stream.setEncoding('utf8');
   stream.on('data', (chunk) => {
@@ -150,6 +157,9 @@ function spawnCommand(worktreePath, label, cmd) {
 }
 
 function finalizeCommand(code) {
+  // A stopped command is authoritative: a late close event (e.g. taskkill on
+  // Windows can report exit 0) must not flip status back to 'done'.
+  if (command?.stopped) return;
   appendLog(`[cmd] exited ${code}`);
   if (command) {
     command.exitCode = code;
@@ -159,6 +169,7 @@ function finalizeCommand(code) {
 }
 
 function failCommand(err) {
+  if (command?.stopped) return;
   appendLog(`[cmd] error: ${err.message}`);
   if (command) {
     command.status = 'failed';
@@ -174,6 +185,7 @@ function failCommand(err) {
 export async function startServer(worktreePath, meta) {
   // Guard: reject concurrent starts (e.g. rapid double-click)
   if (inProgress) return getStatus();
+  clearTerminalCommand();
   inProgress = true;
   try {
     if (worktreeUsesDocker(worktreePath) && !(await _dockerRunningFn())) {
@@ -198,6 +210,7 @@ export async function startServer(worktreePath, meta) {
 
 export async function stopServer() {
   if (!active) return getStatus();
+  clearTerminalCommand();
   const stopped = active;
   active = null;
   installing = false;
@@ -212,6 +225,9 @@ export async function stopServer() {
 }
 
 export async function runCommand(worktreePath, { cmd, label }) {
+  // No "no server + command at once" re-check here: server.js returns 409 when
+  // `active` is set, and node:http handlers set `active` synchronously, so the
+  // invariant is enforced upstream before runCommand is ever reached.
   if (inProgress) return getStatus();
   if (command && command.status === 'running') {
     appendLog('[cmd] a command is already running');
@@ -224,8 +240,12 @@ export async function runCommand(worktreePath, { cmd, label }) {
 
 export function stopCommand() {
   if (!command || command.status !== 'running') return getStatus();
-  _killFn(command.pid);
+  // Mark stopped BEFORE killing so the child's late close/error handler no-ops
+  // instead of flipping status back to 'done' (taskkill can report exit 0).
+  command.stopped = true;
   command.status = 'failed';
+  _killFn(command.pid);
+  appendLog(`[cmd] stopped (pid ${command.pid})`);
   inProgress = false;
   return getStatus();
 }
