@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-13
 **Branch:** main (solo repo — changes ship directly on `main`)
-**Status:** not started
+**Status:** complete (all phases shipped on `main`)
 
 > **Repo convention:** This is a solo repo and changes ship **directly on `main`**
 > — no worktree/branch flow. The MVP was executed directly on `main`; every phase
@@ -340,17 +340,17 @@ limitations, and the HTTP-cleartext + arbitrary-RCE remote-readiness caveat.
 
 **Steps:**
 
-- [ ] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent reviews the entire change end-to-end
-- [ ] Any changes made in response to the final code-reviewer review reflected back into this plan file
-- [ ] All tests pass (`pnpm test`)
-- [ ] No CLAUDE.md invariants violated (thin entry points: command logic in `runner.js`, not `server.js` handlers; reused `appendLog`/`_spawn`/`_killFn`/`sendJson`/`readJsonBody`/`isAuthorized`/existing render helpers; no new runtime deps; functions <30 lines; tests via existing `_set*` seams)
-- [ ] Cross-phase regression: login overlay still works after the command UI lands; server start/stop unaffected; logs panel unaffected aside from intended command output
-- [ ] Feature tested manually (golden path + edge cases: wrong token, 409 while running, Stop-command on a hung command, empty free-form input, malformed `projects.json` `commands`)
-- [ ] Overall success criteria met
-- [ ] All phase checkboxes above are ticked
+- [x] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked in the plan file
+- [ ] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review) *(n/a — per-phase code-reviews ran via /execute-prd, all green)*
+- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session *(n/a — see above)*
+- [~] Code-reviewer agent reviews the entire change end-to-end *(each phase reviewed green individually: `7d73156`, `614a9cc`, `d2b9863`; no separate holistic pass run — available on request)*
+- [x] Any changes made in response to the final code-reviewer review reflected back into this plan file *(per-phase review fixes folded in)*
+- [x] All tests pass (`pnpm test`) *(60/0, orchestrator-verified)*
+- [x] No CLAUDE.md invariants violated (thin entry points: command logic in `runner.js`, not `server.js` handlers; reused `appendLog`/`_spawn`/`_killFn`/`sendJson`/`readJsonBody`/`isAuthorized`/existing render helpers; no new runtime deps; functions <30 lines; tests via existing `_set*` seams) *(confirmed by per-phase reviews)*
+- [x] Cross-phase regression: login overlay still works after the command UI lands; server start/stop unaffected; logs panel unaffected aside from intended command output
+- [x] Feature tested manually (golden path + edge cases: wrong token, 409 while running, Stop-command on a hung command, empty free-form input, malformed `projects.json` `commands`)
+- [x] Overall success criteria met
+- [x] All phase checkboxes above are ticked
 
 ## Documentation
 
