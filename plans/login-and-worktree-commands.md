@@ -343,8 +343,8 @@ limitations, and the HTTP-cleartext + arbitrary-RCE remote-readiness caveat.
 - [x] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review) *(n/a — per-phase code-reviews ran via /execute-prd, all green)*
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session *(n/a — see above)*
-- [~] Code-reviewer agent reviews the entire change end-to-end *(each phase reviewed green individually: `7d73156`, `614a9cc`, `d2b9863`; no separate holistic pass run — available on request)*
-- [x] Any changes made in response to the final code-reviewer review reflected back into this plan file *(per-phase review fixes folded in)*
+- [x] Code-reviewer agent reviews the entire change end-to-end *(holistic cross-phase review run against base `27724ed`..HEAD; found 1 blocking + 2 nits, fixed in `1ffa563`; re-verified green)*
+- [x] Any changes made in response to the final code-reviewer review reflected back into this plan file *(end-to-end review fixes: `stopCommand` keeps stopped commands `failed` despite a late exit-0 close; stale done/failed command banner cleared on server start/stop; `worktrees.js` JSDoc; commit `1ffa563`, dead-var cleanup `2be12ea`)*
 - [x] All tests pass (`pnpm test`) *(60/0, orchestrator-verified)*
 - [x] No CLAUDE.md invariants violated (thin entry points: command logic in `runner.js`, not `server.js` handlers; reused `appendLog`/`_spawn`/`_killFn`/`sendJson`/`readJsonBody`/`isAuthorized`/existing render helpers; no new runtime deps; functions <30 lines; tests via existing `_set*` seams) *(confirmed by per-phase reviews)*
 - [x] Cross-phase regression: login overlay still works after the command UI lands; server start/stop unaffected; logs panel unaffected aside from intended command output
