@@ -119,8 +119,7 @@ describe('inProgress guard blocks a concurrent command', () => {
 
 describe('stopCommand', () => {
   it('kills command.pid and marks state failed', async () => {
-    let child;
-    runner._setSpawnFn(() => (child = makeChild(5555)));
+    runner._setSpawnFn(() => makeChild(5555));
     let killedPid = null;
     runner._setKillFn(async (pid) => { killedPid = pid; });
 
