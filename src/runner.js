@@ -173,7 +173,6 @@ function failCommand(err) {
   appendLog(`[cmd] error: ${err.message}`);
   if (command) {
     command.status = 'failed';
-    command.exitCode = command.exitCode ?? null;
   }
   inProgress = false;
 }
