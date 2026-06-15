@@ -45,6 +45,7 @@
       .project h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
       .row {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 12px;
         padding: 10px 12px;
@@ -68,6 +69,17 @@
       }
       button.start { border-color: var(--accent); }
       button.stop { border-color: var(--red); color: var(--red); }
+      a.open {
+        font: inherit;
+        padding: 5px 14px;
+        border-radius: 6px;
+        border: 1px solid var(--accent);
+        background: #21262d;
+        color: var(--accent);
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+      }
       button:disabled { opacity: 0.5; cursor: not-allowed; }
       .cmd-form { display: flex; gap: 6px; flex-shrink: 0; }
       .cmd-form input[type="text"] {
@@ -347,7 +359,18 @@
         return form;
       }
 
-      function makeRow(w, status, busy) {
+      function makeOpenLink(lanUrl) {
+        const link = document.createElement('a');
+        link.className = 'open';
+        link.href = lanUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = 'Open';
+        link.title = lanUrl;
+        return link;
+      }
+
+      function makeRow(w, status, busy, lanUrl) {
         const isActive = status.active && status.active.path === w.path;
         const cmdRunning = status.command && status.command.status === 'running';
         const controlsBusy = busy || cmdRunning;
@@ -359,6 +382,7 @@
         const btn = document.createElement('button');
         if (isActive) {
           row.insertAdjacentHTML('beforeend', '<span class="running">● running</span>');
+          row.appendChild(makeOpenLink(lanUrl));
           btn.className = 'stop';
           btn.textContent = 'Stop';
           btn.onclick = () => post('/api/stop');
@@ -405,7 +429,7 @@
           const h2 = document.createElement('h2');
           h2.textContent = project;
           section.appendChild(h2);
-          for (const w of worktrees) section.appendChild(makeRow(w, state.status, busy));
+          for (const w of worktrees) section.appendChild(makeRow(w, state.status, busy, state.lanUrl));
           container.appendChild(section);
         }
         restoreFocusedFreeForm(container, focused);
