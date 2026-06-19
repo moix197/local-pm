@@ -222,6 +222,65 @@ own path; stopping a command in worktree A leaves worktree B untouched.
 A command that waits on stdin (e.g. a prompt, `npm init`, etc.) will **hang** and never
 exit on its own. Use **Stop command** to kill it. There is no interactive stdin support.
 
+## Interactive terminals
+
+Each stopped worktree row has an **Open terminal** button that opens an embedded xterm.js
+terminal pane wired to a real PTY on the server via WebSocket.
+
+### WebSocket endpoint
+
+```
+ws://localhost:7420/ws/terminal?token=<token>&worktreePath=<path>&kind=<kind>&cols=<n>&rows=<n>
+```
+
+| Query param | Values | Default |
+|---|---|---|
+| `token` | your bearer token | required |
+| `worktreePath` | absolute path of a registered worktree | required |
+| `kind` | `shell` (interactive shell) or `claude` (claude CLI) | required |
+| `cols` | terminal width (1–500) | required |
+| `rows` | terminal height (1–500) | required |
+
+### Authentication model
+
+The token is passed as a `?token=` query parameter (not a header, since the browser
+`WebSocket` API does not support custom headers). The server validates it with
+`crypto.timingSafeEqual` before completing the HTTP upgrade. Unauthorised upgrades
+receive `HTTP/1.1 401 Unauthorized` and the socket is destroyed — `wss.handleUpgrade`
+is never called.
+
+### Shell detection and `LOCAL_PM_SHELL`
+
+The PTY shell is detected once at startup:
+
+1. `LOCAL_PM_SHELL` env var — if set, used as-is.
+2. `pwsh.exe` — probed with `execFileSync('pwsh.exe', ['-NoProfile', '-Command', 'exit'])`.
+3. `cmd.exe` — fallback.
+
+### Session limit
+
+A maximum of 10 concurrent PTY sessions is enforced. Attempts beyond this receive
+`ws.close(4429, 'session cap reached')`.
+
+### WebSocket close codes
+
+| Code | Meaning |
+|---|---|
+| `4401` | Unauthorized (returned as HTTP 401 before upgrade) |
+| `4403` | Session rejected — unknown worktree path or invalid kind |
+| `4429` | Session cap (10) reached |
+
+### Control frames
+
+After the connection is established, the client may send a JSON control frame to resize the
+PTY:
+
+```json
+{ "resize": { "cols": 120, "rows": 40 } }
+```
+
+Any other message is treated as PTY stdin and forwarded verbatim.
+
 ## Security caveat
 
 > **Read this before exposing the dashboard beyond your local machine.**

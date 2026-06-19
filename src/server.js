@@ -18,6 +18,7 @@ import { ensureToken, isAuthorized } from './token.js';
 import { loadProjects, addProject, removeProject, updateProject } from './config.js';
 import { autoDetectProject } from './detect.js';
 import { listDirectory } from './browse.js';
+import { attachWebSocket } from './ws.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const indexHtml = path.join(repoRoot, 'public', 'index.html');
@@ -240,6 +241,7 @@ async function route(req, res) {
 export const server = http.createServer((req, res) => {
   route(req, res).catch((err) => sendJson(res, 500, { error: err.message }));
 });
+attachWebSocket(server);
 
 // Only bind the port when run as the entry point; importing for tests must not listen.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

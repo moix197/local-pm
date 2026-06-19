@@ -7,6 +7,7 @@ import { server } from '../server.js';
 import { ensureToken } from '../token.js';
 import * as runner from '../runner.js';
 import { assignPort, releasePort, _setIsPortFreeFn, _resetIsPortFreeFn } from '../ports.js';
+import { WebSocket as WsClient } from 'ws';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const projectsFile = path.join(repoRoot, 'projects.json');
@@ -435,6 +436,24 @@ describe('project CRUD routes', () => {
       const body = await res.json();
       assert.equal(body.project.name, 'edited');
       assert.equal(body.project.devCmd, 'npm run dev');
+    });
+  });
+});
+
+describe('WebSocket upgrade', () => {
+  it('rejects upgrade with wrong token (401 before handshake)', async () => {
+    const { port } = server.address();
+    await new Promise((resolve, reject) => {
+      const client = new WsClient(`ws://127.0.0.1:${port}/ws/terminal?token=wrongtoken`);
+      client.on('unexpected-response', (req, res) => {
+        try {
+          assert.equal(res.statusCode, 401);
+          resolve();
+        } catch (e) {
+          reject(e);
+        }
+      });
+      client.on('error', () => resolve());
     });
   });
 });
