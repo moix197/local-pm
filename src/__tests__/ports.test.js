@@ -400,4 +400,62 @@ describe('buildEnvForTarget', () => {
     assert.equal(env.PORT, '3000', 'absent branch → offset 0 → PORT=3000');
     assert.equal(env.WS_PORT, '3000', 'WS_PORT also basePort');
   });
+
+  it('git-wt target with .env defining WS_PORT=4001 uses verbatim value, not computed', () => {
+    // Fixture at fixtures/web_template/.env has WS_PORT=4001, no PORT line.
+    // tmpDir acts as the worktree — we give it a .git dir + ports file so offset resolves.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
+    tmpDirs.push(tmpDir);
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(
+      path.join(tmpDir, '.git', 'git-wt-ports.json'),
+      JSON.stringify({ allocations: { develop: { branch: 'develop', offset: 0 } }, nextOffset: 1 }),
+    );
+    // Copy the fixture .env into tmpDir
+    fs.copyFileSync(
+      path.join(FIXTURES, 'web_template', '.env'),
+      path.join(tmpDir, '.env'),
+    );
+    const env = buildEnvForTarget({ project: 'web', branch: 'develop', path: tmpDir, type: 'git-wt' });
+    // WS_PORT from .env verbatim
+    assert.equal(env.WS_PORT, '4001', 'WS_PORT must come from .env verbatim, not computed');
+    // PORT absent from .env → computed: 3000 + 0*100 = 3000
+    assert.equal(env.PORT, '3000', 'PORT absent from .env → computed as basePort + offset*increment');
+  });
+
+  it('git-wt target with .env missing PORT computes PORT as basePort + offset * increment', () => {
+    // Fixture .env has WS_PORT=4001 but no PORT — PORT must be computed.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
+    tmpDirs.push(tmpDir);
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(
+      path.join(tmpDir, '.git', 'git-wt-ports.json'),
+      JSON.stringify({ allocations: { 'feat/x': { branch: 'feat/x', offset: 5 } }, nextOffset: 6 }),
+    );
+    fs.copyFileSync(
+      path.join(FIXTURES, 'web_template', '.env'),
+      path.join(tmpDir, '.env'),
+    );
+    const env = buildEnvForTarget({ project: 'web', branch: 'feat/x', path: tmpDir, type: 'git-wt' });
+    // PORT not in .env → computed: 3000 + 5*100 = 3500
+    assert.equal(env.PORT, '3500', 'PORT computed as basePort + offset * increment when absent from .env');
+  });
+
+  it('git-wt target offset-37 with .env WS_PORT=7701 uses verbatim 7701', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
+    tmpDirs.push(tmpDir);
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(
+      path.join(tmpDir, '.git', 'git-wt-ports.json'),
+      JSON.stringify({
+        allocations: { 'feat/dev-otp-echo': { branch: 'feat/dev-otp-echo', offset: 37 } },
+        nextOffset: 38,
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, '.env'), 'WS_PORT=7701\n');
+    const env = buildEnvForTarget({ project: 'web', branch: 'feat/dev-otp-echo', path: tmpDir, type: 'git-wt' });
+    assert.equal(env.WS_PORT, '7701', 'WS_PORT=7701 from .env verbatim for offset-37 worktree');
+    // PORT not in .env → computed: 3000 + 37*100 = 6700
+    assert.equal(env.PORT, '6700', 'PORT computed as 3000 + 37*100 = 6700');
+  });
 });

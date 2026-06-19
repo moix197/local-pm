@@ -274,6 +274,35 @@ function hasComposeFile(dirPath) {
 }
 
 /**
+ * Read KEY=value lines from <worktreePath>/.env and return an object of
+ * { KEY: number } for entries whose value is a pure integer string.
+ * Returns {} when the file is absent (ENOENT) or unreadable.
+ * @param {string} worktreePath
+ * @returns {Record<string, number>}
+ */
+function readDotEnvNumbers(worktreePath) {
+  let content;
+  try {
+    content = fs.readFileSync(path.join(worktreePath, '.env'), 'utf8');
+  } catch {
+    return {};
+  }
+  const result = {};
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const value = trimmed.slice(eqIdx + 1).trim();
+    if (/^\d+$/.test(value)) {
+      result[key] = Number(value);
+    }
+  }
+  return result;
+}
+
+/**
  * Build the environment variables to inject when starting a server for a worktree.
  * Dispatches on worktree.type:
  *   - 'git-wt': reads git-wt-ports.json offset, uses git-wt envVars config (PORT, WS_PORT)
@@ -292,10 +321,18 @@ export function buildEnvForTarget(worktree) {
     // If the ports file is missing/unreadable, offset defaults to 0 (basePort).
     const offset = offsetResult?.offset ?? 0;
     const config = readGitWtConfig(wtPath);
-    const port = config.basePort + offset * config.increment;
+    const dotEnv = readDotEnvNumbers(wtPath);
     const env = {};
     for (const varName of config.envVars) {
-      env[varName] = String(port);
+      // Use the value from the worktree's .env verbatim when it defines this var as a number.
+      // Only compute basePort + offset * increment for vars absent from .env.
+      const computed = config.basePort + offset * config.increment;
+      env[varName] = String(varName in dotEnv ? dotEnv[varName] : computed);
+    }
+    // Always ensure PORT is set (runner.js depends on it).
+    if (!('PORT' in env)) {
+      const computed = config.basePort + offset * config.increment;
+      env.PORT = String('PORT' in dotEnv ? dotEnv.PORT : computed);
     }
     // Only set COMPOSE_PROJECT_NAME when compose files are present.
     if (hasComposeFile(wtPath)) {
