@@ -127,16 +127,16 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 
 **Steps:**
 
-- [ ] Add `readGitWtOffset(projectRoot, branch)` to `ports.js`: reads `.git/git-wt-ports.json`; returns `{offset}` for the branch; returns `null` in all three fallback cases — (a) file absent, (b) file present but branch has no entry, (c) malformed JSON (catch `JSON.parse` error, emit a `console.warn`, return `null`); caller falls back to `assignPort` on `null`
-- [ ] Add `scanComposePortVars(projectRoot)` to `ports.js`: globs for `docker-compose*.yml` and `compose.yaml`, parses each for `ports:` lines containing `${VAR}` pattern, returns `[{varName, base}]`; returns `[]` if no compose files or no port placeholders
-- [ ] Add `buildEnvForTarget(worktree)` to `ports.js`: dispatches to git-wt path (offset + base arithmetic), docker-not-git-wt path (assignPort per VAR), or plain path (assignPort for PORT); always includes COMPOSE_PROJECT_NAME for any Docker target
-- [ ] Update `runner.js` `startServer` to call `buildEnvForTarget(meta)` internally; remove env parameter from signature
-- [ ] Update `runner.js` `stopServer` to extract `COMPOSE_PROJECT_NAME` from stored entry env and pass `--project-name` flag to `docker compose down` if present
-- [ ] Update `server.js` `POST /api/start` to pass full worktree meta; remove env assembly from route handler
-- [ ] Add fixture files for tests: a sample `.git/git-wt-ports.json` and a sample `docker-compose.yml` with `${APP_PORT}` / `${WS_HOST_PORT}` placeholders
-- [ ] Update `ports.test.js` with new cases
-- [ ] Update `runner.test.js` with env-injection and scoped-stop assertions
-- [ ] Update README: document hybrid port model (git-wt offset vs plain PORT vs docker-not-git-wt)
+- [x] Add `readGitWtOffset(projectRoot, branch)` to `ports.js`: reads `.git/git-wt-ports.json`; returns `{offset}` for the branch; returns `null` in all three fallback cases — (a) file absent, (b) file present but branch has no entry, (c) malformed JSON (catch `JSON.parse` error, emit a `console.warn`, return `null`); caller falls back to `assignPort` on `null`
+- [x] Add `scanComposePortVars(projectRoot)` to `ports.js`: globs for `docker-compose*.yml` and `compose.yaml`, parses each for `ports:` lines containing `${VAR}` pattern, returns `[{varName, base}]`; returns `[]` if no compose files or no port placeholders
+- [x] Add `buildEnvForTarget(worktree)` to `ports.js`: dispatches to git-wt path (offset + base arithmetic), docker-not-git-wt path (assignPort per VAR), or plain path (assignPort for PORT); always includes COMPOSE_PROJECT_NAME for any Docker target
+- [x] Update `runner.js` `startServer` to call `buildEnvForTarget(meta)` internally; remove env parameter from signature
+- [x] Update `runner.js` `stopServer` to extract `COMPOSE_PROJECT_NAME` from stored entry env and pass `--project-name` flag to `docker compose down` if present
+- [x] Update `server.js` `POST /api/start` to pass full worktree meta; remove env assembly from route handler
+- [x] Add fixture files for tests: a sample `.git/git-wt-ports.json` and a sample `docker-compose.yml` with `${APP_PORT}` / `${WS_HOST_PORT}` placeholders
+- [x] Update `ports.test.js` with new cases
+- [x] Update `runner.test.js` with env-injection and scoped-stop assertions
+- [x] Update README: document hybrid port model (git-wt offset vs plain PORT vs docker-not-git-wt)
 
 **Tests:**
 
@@ -147,7 +147,7 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 
 **Verification:**
 
-- [ ] Automated tests pass: `pnpm test`
+- [x] Automated tests pass: `pnpm test`
 - [ ] Manually start two web_template worktrees; confirm each row shows distinct APP_PORT values
 - [ ] Stop one; confirm only its `docker compose down` fires (check process output / logs); other worktree stays running
 - [ ] Start a plain project alongside a git-wt worktree; both run concurrently on distinct ports
@@ -157,12 +157,12 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (see Documentation section)
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
+- [x] Tests for this phase written and passing
+- [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat: hybrid port model — git-wt offset + compose env injection + scoped docker stop`
+- [x] Changes committed: `feat: hybrid port model — git-wt offset + compose env injection + scoped docker stop`
 - [ ] Phase marked complete
 
 ---
