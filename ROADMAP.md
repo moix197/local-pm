@@ -99,6 +99,34 @@ Single-operation guard reused — commands and server start/stop are serialized.
 
 ---
 
+## Phase 8 — Multi-project concurrent servers  *(done)*
+
+Removed the single-server-at-a-time constraint. The runner is now per-target
+(`Map<path, …>`): multiple dev servers run simultaneously, each on a distinct port,
+each with its own log buffer and lazy-fetched console (`GET /api/logs?path=`).
+`POST /api/stop` stops one server by `path` or all when the body is omitted. Hybrid
+port model: git-wt offset (`.git/git-wt-ports.json`), an in-process plain-`PORT` pool
+(3100–3199, `503` on exhaustion), and docker-not-git-wt (pool port per compose var +
+`COMPOSE_PROJECT_NAME`); `docker compose down` is scoped with `--project-name` on stop.
+Project CRUD from the UI (`/api/projects` add/edit/remove) with auto-detection
+(git-wt / docker / plain) and a setup-form fallback; the spawned dev command always
+originates from the project's `package.json` scripts or the explicit setup form, never
+raw user input. Ad-hoc commands are per-target — the global `409` is gone, so a command
+in one worktree never blocks another.
+
+---
+
+## PRD 2 — Interactive terminals  *(next planned)*
+
+Replace the poll-based lazy console with true interactive terminals: `node-pty` for a
+real PTY per worktree, a WebSocket channel for bidirectional streaming, and `xterm.js`
+in the browser. The Phase-8 lazy-fetch log API (`GET /api/logs?path=`) was designed to
+be forward-compatible with this upgrade — the fetch seam is marked in the UI code.
+Enables interactive commands (prompts, REPLs, full TTY programs) that the current
+fire-and-read command model cannot support.
+
+---
+
 ## Deferred (post-V1)
 
 - **ngrok / cloudflared** tunnel management for outside-network access, surfaced

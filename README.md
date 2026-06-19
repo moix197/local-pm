@@ -142,8 +142,8 @@ curl -X POST -H "Authorization: Bearer <token>" http://localhost:7420/api/stop
 | GET | `/api/logs` | `?path=<worktree>` | `{ logs: string[] }` for that server |
 | POST | `/api/start` | `{ path }` | status for that path (pool port assigned) |
 | POST | `/api/stop` | `{ path }` (optional) | with `path`: stop that server; without: stop all |
-| POST | `/api/command` | `{ path, cmd, label }` | runs a command in that worktree |
-| POST | `/api/command/stop` | — | stops the running command |
+| POST | `/api/command` | `{ path, cmd, label }` | runs a command in that worktree (per-target `409` only — a command in another worktree never blocks this one) |
+| POST | `/api/command/stop` | `{ path }` | stops that worktree's running command |
 
 If the port pool (3100–3199) is fully allocated, `/api/start` returns `503` with a
 descriptive error. Port allocation is **in-process only** — it tracks ports local-pm
@@ -154,9 +154,13 @@ Without a valid token these endpoints return `401 {"error":"Unauthorized"}`.
 
 ## Running commands in a worktree
 
-On a **stopped** worktree each row shows command controls. (A worktree whose server is
-running is controlled from the **Running servers** section instead; per-target command
-controls in each running row arrive in a later phase.)
+Commands are **per-target**: every worktree path has its own command slot. Running a
+command in worktree A never blocks starting, stopping, or commanding worktree B —
+`/api/command` only returns `409` when *that same path* already has a command running.
+
+A **stopped** worktree row shows command controls. A worktree whose server is running
+is controlled from the **Running servers** section, where each running row carries its
+own command input and **Stop command** button.
 
 ### Quick-action buttons
 
@@ -216,10 +220,10 @@ path's logs, never another server's.
 
 ### Stop command
 
-A running command can be stopped via `POST /api/command/stop`, which kills the command
-process tree (`taskkill /T /F` on Windows) and marks the command failed. (A per-server
-**Stop command** button in each running row arrives with per-target commands in a later
-phase.)
+A running command can be stopped via `POST /api/command/stop` with `{ path }`, which
+kills that worktree's command process tree (`taskkill /T /F` on Windows) and marks the
+command failed. Each running-server row exposes a **Stop command** button wired to its
+own path; stopping a command in worktree A leaves worktree B untouched.
 
 ### Known limitation — interactive commands
 
@@ -295,7 +299,9 @@ See [`mcp/README.md`](mcp/README.md) for full setup, env vars, and the Claude Co
 ## Reach from another LAN machine
 
 Open `http://<desktop-ip>:7420` from any device on the same network — the dashboard
-binds to `0.0.0.0`. The active dev server link points at `http://<desktop-ip>:3000`.
+binds to `0.0.0.0`. Each running server's row links to its own
+`http://<desktop-ip>:<assigned-port>`; the header `lanUrl` points at the first running
+server's port (`null` when nothing is running).
 
 ## Add projects
 
@@ -365,8 +371,10 @@ contains invalid JSON, startup fails with a descriptive error
   Port allocation is in-process; a second local-pm instance on the same machine would
   collide.
 - **Dev mode only.**
-- Each server's dev `PORT` is injected from the pool; the worktree's dev script must
-  honour `PORT`. The header LAN link points at the dev base URL.
+- Each plain server's dev `PORT` is injected from the pool; the worktree's dev script
+  must honour `PORT`. git-wt / docker targets instead receive their compose port vars
+  (e.g. `APP_PORT`, `WS_HOST_PORT`) — see [Hybrid port model](#hybrid-port-model). The
+  header `lanUrl` points at the first running server's port.
 - `docker compose down` is run on stop; its errors are ignored so worktrees without a
   compose file still stop cleanly.
 - Windows-specific: uses `npm.cmd`, `taskkill`, and `shell: true` for `.cmd` resolution.
