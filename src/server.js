@@ -21,6 +21,12 @@ import { listDirectory } from './browse.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const indexHtml = path.join(repoRoot, 'public', 'index.html');
+const vendorDir = path.join(repoRoot, 'public', 'vendor');
+
+const VENDOR_CONTENT_TYPES = {
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+};
 
 const PORT = Number(process.env.LOCAL_PM_PORT) || 7420;
 
@@ -50,6 +56,30 @@ function serveIndex(res) {
   const html = fs.readFileSync(indexHtml, 'utf8');
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(html);
+}
+
+// Serve vendored static assets from public/vendor/. The decoded path is resolved
+// and asserted to stay inside vendorDir (traversal guard) before any file read.
+function serveVendor(url, res) {
+  const rel = decodeURIComponent(url.pathname.slice('/vendor/'.length));
+  const resolved = path.resolve(vendorDir, rel);
+  if (!resolved.startsWith(vendorDir + path.sep)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    return res.end('Forbidden');
+  }
+  let body;
+  try {
+    body = fs.readFileSync(resolved);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      return res.end('Not found');
+    }
+    throw err;
+  }
+  const type = VENDOR_CONTENT_TYPES[path.extname(resolved)] ?? 'application/octet-stream';
+  res.writeHead(200, { 'Content-Type': type });
+  res.end(body);
 }
 
 async function handleState(res) {
@@ -192,6 +222,7 @@ async function route(req, res) {
     return sendJson(res, 401, { error: 'Unauthorized' });
   }
   if (method === 'GET' && url.pathname === '/') return serveIndex(res);
+  if (method === 'GET' && url.pathname.startsWith('/vendor/')) return serveVendor(url, res);
   if (method === 'GET' && url.pathname === '/api/state') return handleState(res);
   if (method === 'GET' && url.pathname === '/api/logs') return handleLogs(url, res);
   if (method === 'GET' && url.pathname === '/api/browse') return handleBrowse(url, res);

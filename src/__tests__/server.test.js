@@ -199,6 +199,45 @@ describe('POST /api/command', () => {
   });
 });
 
+describe('GET /vendor/ static route', () => {
+  it('serves xterm.js as application/javascript', async () => {
+    const res = await fetch(`${baseUrl}/vendor/xterm.js`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'application/javascript');
+  });
+
+  it('serves xterm.css as text/css', async () => {
+    const res = await fetch(`${baseUrl}/vendor/xterm.css`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'text/css');
+  });
+
+  it('serves addon-fit.js as application/javascript', async () => {
+    const res = await fetch(`${baseUrl}/vendor/addon-fit.js`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'application/javascript');
+  });
+
+  it('rejects a path-traversal attempt with 403', async () => {
+    // ..%2f survives URL normalization (a bare ../ would collapse before reaching
+    // the handler); decoded it escapes public/vendor/, so the guard must 403.
+    const res = await fetch(`${baseUrl}/vendor/..%2ftoken.local`);
+    assert.equal(res.status, 403);
+  });
+
+  it('rejects an absolute-path injection with 403', async () => {
+    // %2f-encoded leading slash decodes to an absolute path that resolves
+    // outside public/vendor/ — the guard must reject it too.
+    const res = await fetch(`${baseUrl}/vendor/%2fetc%2fpasswd`);
+    assert.equal(res.status, 403);
+  });
+
+  it('returns 404 for a missing vendor file', async () => {
+    const res = await fetch(`${baseUrl}/vendor/nope.js`);
+    assert.equal(res.status, 404);
+  });
+});
+
 describe('GET /api/state', () => {
   it('returns a running array and omits the legacy logs field', async () => {
     const res = await fetch(`${baseUrl}/api/state`, { headers: auth() });
