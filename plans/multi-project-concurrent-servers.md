@@ -66,15 +66,15 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 
 **Steps:**
 
-- [ ] Rewrite `runner.js`: replace module-level `active`/`inProgress`/`logs`/`command` scalars with `Map` instances; update all internal references; update `startServer` signature to `(path, meta, env)`; spawn options must be `{cwd, shell:true, env:{...process.env, ...env}}` — the spread of `process.env` is a hard requirement on Windows (PATH, npm.cmd); update exports
-- [ ] Create `ports.js` with `assignPort(path)` and `releasePort(path)` scanning the runner's active Map for in-use ports in the 3100–3199 range; export both functions
-- [ ] Update `server.js` routes: `/api/state` drops `logs` from response body, adds `running` array from `getAllStatuses()`; add `GET /api/logs?path=...` handler returning `getLogs(path)`; update `/api/stop` to accept optional `path`; update `/api/start` to call `assignPort`, pass `{PORT}` to `startServer`; remove global 409 guard from `handleCommand`
-- [ ] Update `public/index.html`: remove `renderBanner()`; add `renderRunning(running)` building rows from `state.running`; add `openConsole(path)` that polls `/api/logs?path=...` and inserts a `<pre>` panel (lazy fetch: only while panel open); add "Stop all" button calling `/api/stop` with no body; add comment `// PRD 2: replace poll with WebSocket stream (node-pty+xterm.js) — out of scope here` near the console fetch so the seam is visible
-- [ ] Rewrite `runner.test.js` for Map API; add env-merge assertion
-- [ ] Create `ports.test.js`
-- [ ] Update `server.test.js` with new route cases
-- [ ] Update `runner.command.test.js` for new signature
-- [ ] Update README: replace "one server at a time" with multi-server model; document `/api/logs`, updated `/api/stop`
+- [x] Rewrite `runner.js`: replace module-level `active`/`inProgress`/`logs`/`command` scalars with `Map` instances; update all internal references; update `startServer` signature to `(path, meta, env)`; spawn options must be `{cwd, shell:true, env:{...process.env, ...env}}` — the spread of `process.env` is a hard requirement on Windows (PATH, npm.cmd); update exports
+- [x] Create `ports.js` with `assignPort(path)` and `releasePort(path)` scanning the runner's active Map for in-use ports in the 3100–3199 range; export both functions
+- [x] Update `server.js` routes: `/api/state` drops `logs` from response body, adds `running` array from `getAllStatuses()`; add `GET /api/logs?path=...` handler returning `getLogs(path)`; update `/api/stop` to accept optional `path`; update `/api/start` to call `assignPort`, pass `{PORT}` to `startServer`; remove global 409 guard from `handleCommand`
+- [x] Update `public/index.html`: remove `renderBanner()`; add `renderRunning(running)` building rows from `state.running`; add `openConsole(path)` that polls `/api/logs?path=...` and inserts a `<pre>` panel (lazy fetch: only while panel open); add "Stop all" button calling `/api/stop` with no body; add comment `// PRD 2: replace poll with WebSocket stream (node-pty+xterm.js) — out of scope here` near the console fetch so the seam is visible
+- [x] Rewrite `runner.test.js` for Map API; add env-merge assertion
+- [x] Create `ports.test.js`
+- [x] Update `server.test.js` with new route cases
+- [x] Update `runner.command.test.js` for new signature
+- [x] Update README: replace "one server at a time" with multi-server model; document `/api/logs`, updated `/api/stop`
 
 **Tests:**
 
@@ -87,7 +87,7 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 
 **Verification:**
 
-- [ ] Automated tests pass: `pnpm test`
+- [x] Automated tests pass: `pnpm test`
 - [ ] Manually start two plain-project worktrees from the UI; confirm each row shows a distinct port
 - [ ] Click "Open console" on each server; confirm logs appear independently
 - [ ] Stop server A; confirm server B is still running with its logs intact
@@ -98,12 +98,12 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (see Documentation section)
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
+- [x] Tests for this phase written and passing
+- [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat: multi-server Map-based runner, per-server logs, lazy console UI`
+- [x] Changes committed: `feat: multi-server Map-based runner, per-server logs, lazy console UI`
 - [ ] Phase marked complete
 
 ---
