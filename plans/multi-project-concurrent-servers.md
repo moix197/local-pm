@@ -249,11 +249,11 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 
 **Steps:**
 
-- [ ] Replace `command` scalar in `runner.js` with `Map<path, CommandEntry>`; update `runCommand(path,{cmd,label})`, `stopCommand(path)`, `getStatus(path)` to use per-path map
-- [ ] Update `server.js` `POST /api/command` to do per-target busy check (`getStatus(path).command !== null`) instead of global check; update `POST /api/command/stop` to pass path
-- [ ] Move command input in `public/index.html` from global position into each running-server row; wire up path-scoped start/stop calls
-- [ ] Rewrite `runner.command.test.js` for Map API and concurrent-path case
-- [ ] Update `server.test.js` with concurrent-command and per-target-409 cases
+- [x] Replace `command` scalar in `runner.js` with `Map<path, CommandEntry>`; update `runCommand(path,{cmd,label})`, `stopCommand(path)`, `getStatus(path)` to use per-path map
+- [x] Update `server.js` `POST /api/command` to do per-target busy check (`getStatus(path).command !== null`) instead of global check; update `POST /api/command/stop` to pass path
+- [x] Move command input in `public/index.html` from global position into each running-server row; wire up path-scoped start/stop calls
+- [x] Rewrite `runner.command.test.js` for Map API and concurrent-path case
+- [x] Update `server.test.js` with concurrent-command and per-target-409 cases
 
 **Tests:**
 
@@ -264,7 +264,7 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 
 **Verification:**
 
-- [ ] Automated tests pass: `pnpm test`
+- [x] Automated tests pass: `pnpm test`
 - [ ] Manually: start server in worktree A; run a command in worktree B via UI → no 409
 - [ ] Run command in worktree A while A's server is running → command appears in A's row, B unaffected
 - [ ] Stop command in A → B's state unchanged
@@ -274,12 +274,12 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
+- [x] Tests for this phase written and passing
 - [ ] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat: per-target ad-hoc commands — remove global 409, per-path command map`
+- [x] Changes committed: `feat: per-target ad-hoc commands — remove global 409, per-path command map`
 - [ ] Phase marked complete
 
 ---
