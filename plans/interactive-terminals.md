@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-19
 **Branch:** `feat/interactive-terminals`
-**Status:** Phase 1 complete; Phase 2 next
+**Status:** Phase 1 complete; Phase 2 implemented + code-review green — pending hil manual verification + orchestrator approval
 
 ## Context
 
@@ -223,14 +223,14 @@ These are the only new runtime dependencies this plan adds.
 
 **Steps:**
 
-- [ ] Add `scrollback`, `ws` (nullable), and `idleAt` fields to each session entry in `src/pty.js`
-- [ ] Update `pty.onData` handler to append to scrollback ring (enforce byte cap + chunk-count cap, evict from front)
-- [ ] Implement `attachClient(id, ws)`: replay scrollback chunks to ws, set `session.ws = ws`, wire live data pipe
-- [ ] Implement `detachClient(id)`: set `session.ws = null`, set `session.idleAt = new Date()`; do NOT kill pty
-- [ ] Implement idle reaper `setInterval` (use `_setTimerFn` seam); call `killSession` (shared teardown) on sessions past threshold; add `_setTimerFn` export; add `shutdown()` (kill all sessions + clear interval) and wire `process.on('SIGINT'/'SIGTERM')` to it
-- [ ] Update `src/ws.js` upgrade handler: check if `sessionId` already in Map → reattach path vs new-spawn path; on `ws.close` call `detachClient` instead of `killSession`
-- [ ] Update `src/__tests__/pty.test.js` with detach/reattach/scrollback/reaper tests; use `_setSpawnFn` + `_setTimerFn` seams; assert pty NOT killed on detach; assert scrollback replayed on reattach; assert cap eviction; assert reaper fires after mock-timeout
-- [ ] No frontend changes needed in this phase (the WS reconnect flow already works with the new reattach path — the browser just opens a new WS with the same `sessionId`)
+- [x] Add `scrollback`, `ws` (nullable), and `idleAt` fields to each session entry in `src/pty.js`
+- [x] Update `pty.onData` handler to append to scrollback ring (enforce byte cap + chunk-count cap, evict from front) _(handler wired ONCE at spawn — fix eb870df; see Post-implementation fix below)_
+- [x] Implement `attachClient(id, ws)`: replay scrollback chunks to ws, set `session.ws = ws` _(onData NOT re-registered here — single spawn-time handler reads `session.ws` dynamically)_
+- [x] Implement `detachClient(id)`: set `session.ws = null`, set `session.idleAt`; do NOT kill pty
+- [x] Implement idle reaper `setInterval` (use `_setTimerFn` seam); call `killSession` (shared teardown) on sessions past threshold; add `_setTimerFn` export; add `shutdown()` (kill all sessions + clear interval) and wire `process.on('SIGINT'/'SIGTERM')` to it
+- [x] Update `src/ws.js` upgrade handler: check if `sessionId` already in Map → reattach path vs new-spawn path; on `ws.close` call `detachClient` instead of `killSession`
+- [x] Update `src/__tests__/pty.test.js` with detach/reattach/scrollback/reaper tests; use `_setSpawnFn` + `_setTimerFn` seams; assert pty NOT killed on detach; assert scrollback replayed on reattach; assert cap eviction; assert reaper fires after mock-timeout
+- [x] No frontend changes needed in this phase (the WS reconnect flow already works with the new reattach path — the browser just opens a new WS with the same `sessionId`)
 
 **Tests:**
 
@@ -240,7 +240,7 @@ These are the only new runtime dependencies this plan adds.
 
 **Verification:**
 
-- [ ] Automated tests pass: `pnpm test`
+- [x] Automated tests pass: `pnpm test` _(176 pass, 0 fail)_
 - [ ] Manually: start `ping localhost -t` in terminal; close tab; reopen with same sessionId; confirm process still running + history in scrollback
 - [ ] Manually: leave a terminal detached for the configured idle timeout (or temporarily set `LOCAL_PM_IDLE_TIMEOUT_MINUTES=1`); confirm session disappears from any Map introspection (add a `GET /api/terminal/sessions` debug route — gated behind `isAuthorized` and a dev flag — for this verification only; do not expose it in the default build)
 - [ ] Manually (Windows teardown): record the shell PID before reaping; after the reaper fires, confirm via `Get-Process` the shell process is terminated; repeat with a `claude` session and check for lingering grandchildren — document any in README per the teardown spec
@@ -249,16 +249,18 @@ These are the only new runtime dependencies this plan adds.
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (see Documentation section)
+- [ ] All Steps and Verification checkboxes above ticked in the plan file _(Steps + automated-test verification ticked; manual verification boxes pending hil)_
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn _(code-review run inline via code-reviewer subagent)_
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session _(N/A — reviewed via subagent in-session)_
+- [x] Code-reviewer agent has verified this phase _(verdict: green after fix eb870df; first pass was red on the onData double-registration bug)_
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file _(onData-once fix recorded in Steps + Post-implementation fix below)_
+- [x] Tests for this phase written and passing _(176 pass, 0 fail)_
+- [ ] Documentation updated (see Documentation section) _(detach/reattach + `LOCAL_PM_IDLE_TIMEOUT_MINUTES` README docs deferred to Phase 4 per Documentation table)_
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat: terminal detach/reattach — scrollback ring buffer + idle reaper`
+- [x] Changes committed: `feat: terminal detach/reattach — scrollback ring buffer + idle reaper` _(cec130f; + fix eb870df)_
 - [ ] Phase marked complete
+
+**Post-implementation fix (eb870df):** First code-review pass was **red** — `attachClient` re-registered `ptyProcess.onData(...)` on every attach; node-pty accumulates listeners, so after a detach→reattach cycle each chunk was appended to scrollback twice and live-sent twice (worsening per reattach). Fix: wire `pty.onData` **exactly once at spawn time**; the single handler always appends to scrollback and live-sends only when a client is attached + backpressure ok (reads `session.ws` dynamically). `attachClient` now only replays scrollback + sets `session.ws`. Added regression test (attach A → detach → attach B → push data → assert each chunk once in scrollback + once to B, handler count stays 1). Re-review verdict: green. 176 tests pass.
 
 ---
 
