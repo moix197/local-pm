@@ -76,7 +76,14 @@ async function handleStart(req, res) {
     return sendJson(res, 400, { error: `unknown or missing worktree path: ${worktreePath}` });
   }
   const meta = { project: known.project, branch: known.branch, path: worktreePath, type: known.type };
-  await startServer(worktreePath, meta);
+  try {
+    await startServer(worktreePath, meta);
+  } catch (err) {
+    if (/pool exhausted/i.test(err.message)) {
+      return sendJson(res, 503, { error: err.message });
+    }
+    throw err;
+  }
   sendJson(res, 200, getStatus(worktreePath));
 }
 

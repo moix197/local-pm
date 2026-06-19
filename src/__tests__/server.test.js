@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { server } from '../server.js';
 import { ensureToken } from '../token.js';
 import * as runner from '../runner.js';
+import { assignPort, releasePort } from '../ports.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const projectsFile = path.join(repoRoot, 'projects.json');
@@ -235,5 +236,32 @@ describe('POST /api/start concurrent', () => {
     // Same path is guarded by runner's per-path inProgress, but the route never
     // returns a global 409 — it returns 200 with status.
     assert.notEqual(res.status, 409, 'no global 409 on concurrent start');
+  });
+});
+
+describe('POST /api/start pool exhaustion', () => {
+  it('returns 503 with a descriptive message when the port pool is exhausted', async () => {
+    const POOL_START = 3100;
+    const POOL_END = 3199;
+    const filledKeys = [];
+    // Fill every slot in the pool so the next assignPort throws.
+    for (let i = 0; i <= POOL_END - POOL_START; i += 1) {
+      const key = `__fill__${i}`;
+      assignPort(key);
+      filledKeys.push(key);
+    }
+    try {
+      const wt = await knownWorktreePath();
+      const res = await fetch(`${baseUrl}/api/start`, {
+        method: 'POST',
+        headers: auth({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ path: wt }),
+      });
+      assert.equal(res.status, 503, 'exhausted pool must return 503');
+      const body = await res.json();
+      assert.ok(/pool exhausted/i.test(body.error), `expected pool-exhausted message, got: ${body.error}`);
+    } finally {
+      for (const key of filledKeys) releasePort(key);
+    }
   });
 });

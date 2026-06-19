@@ -235,6 +235,31 @@ describe('buildEnvForTarget', () => {
     assert.ok(env.COMPOSE_PROJECT_NAME, 'COMPOSE_PROJECT_NAME should be set');
   });
 
+  it('docker type pool ports are fully freed after releasePort — no leak across start→stop→start', () => {
+    const content =
+      'version: "3"\nservices:\n  app:\n    image: node:22\n    ports:\n      - "${APP_PORT}:3000"\n      - "${WS_HOST_PORT}:3001"\n';
+    const tmpDir = makeFakeProjectWithCompose(content);
+    tmpDirs.push(tmpDir);
+
+    const worktree = { project: 'proj', branch: 'main', path: tmpDir, type: 'docker' };
+
+    // First start — allocates composite keys.
+    const env1 = buildEnvForTarget(worktree);
+    const port1 = Number(env1.APP_PORT);
+    const wsPort1 = Number(env1.WS_HOST_PORT);
+    assert.ok(port1 >= POOL_START && port1 <= POOL_END, 'first APP_PORT in pool range');
+
+    // Simulate stop — releasePort with bare path must free composite keys.
+    releasePort(tmpDir);
+
+    // Second start — must succeed (pool not leaked) and can reuse the same slots.
+    const env2 = buildEnvForTarget(worktree);
+    assert.ok(env2.APP_PORT, 'APP_PORT assigned on second start');
+    assert.ok(env2.WS_HOST_PORT, 'WS_HOST_PORT assigned on second start');
+    // Clean up second allocation.
+    releasePort(tmpDir);
+  });
+
   it('git-wt type falls back to assignPort when readGitWtOffset returns null', () => {
     // No .git dir => offset is null => falls back to plain PORT
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));

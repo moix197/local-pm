@@ -46,10 +46,16 @@ export function assignPort(worktreePath) {
 
 /**
  * Release the port previously assigned to `worktreePath`. No-op if none.
+ * Also frees any composite keys of the form `${worktreePath}:*` that docker
+ * targets allocate via buildEnvForTarget.
  * @param {string} worktreePath
  */
 export function releasePort(worktreePath) {
   allocated.delete(worktreePath);
+  const prefix = worktreePath + ':';
+  for (const key of allocated.keys()) {
+    if (key.startsWith(prefix)) allocated.delete(key);
+  }
 }
 
 /**
