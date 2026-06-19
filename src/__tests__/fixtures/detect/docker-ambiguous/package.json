@@ -1,0 +1,6 @@
+{
+  "name": "docker-ambiguous-fixture",
+  "scripts": {
+    "dev": "node server.js"
+  }
+}

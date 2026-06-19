@@ -10,6 +10,7 @@ const gitwtDir = path.join(FIXTURES, 'gitwt');
 const dockerDir = path.join(FIXTURES, 'docker');
 const plainDir = path.join(FIXTURES, 'plain');
 const ambiguousDir = path.join(FIXTURES, 'ambiguous');
+const dockerAmbiguousDir = path.join(FIXTURES, 'docker-ambiguous');
 
 describe('autoDetectProject — security gate', () => {
   it('throws on a nonexistent path', () => {
@@ -58,6 +59,27 @@ describe('autoDetectProject — devCmd sourcing', () => {
   it('sets needsSetup when neither dev nor start script exists', () => {
     const result = autoDetectProject(ambiguousDir);
     assert.equal(result.devCmd, null);
+    assert.equal(result.needsSetup, true);
+  });
+});
+
+describe('autoDetectProject — needsSetup by type', () => {
+  it('git-wt with a dev script needs no setup despite ambiguous compose port vars', () => {
+    const result = autoDetectProject(gitwtDir);
+    assert.equal(result.type, 'git-wt');
+    assert.equal(result.devCmd, 'npm run dev');
+    assert.ok(
+      result.portVars.some((v) => v.base == null),
+      'fixture has unresolved ${VAR} port placeholders',
+    );
+    assert.equal(result.needsSetup, false);
+  });
+
+  it('docker with ambiguous port vars needs setup even when a dev script exists', () => {
+    const result = autoDetectProject(dockerAmbiguousDir);
+    assert.equal(result.type, 'docker');
+    assert.equal(result.devCmd, 'npm run dev');
+    assert.ok(result.portVars.some((v) => v.base == null), 'fixture has ambiguous port vars');
     assert.equal(result.needsSetup, true);
   });
 });

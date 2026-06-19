@@ -91,10 +91,13 @@ export function autoDetectProject(folderPath) {
     type = 'plain';
   }
 
-  // Ambiguous when a Docker/git-wt project exposes port vars but we could not
-  // resolve a base for one of them (right side of the colon was not a number).
+  // Ambiguous when a Docker project exposes port vars but we could not resolve
+  // a base for one of them (right side of the colon was not a number).
+  // git-wt derives its ports from git-wt (offset + worktree .env), NOT from
+  // compose port vars — so compose-var ambiguity is irrelevant there.
   const portVarsAmbiguous = portVars.some((v) => v.base == null);
-  const needsSetup = devCmd == null || portVarsAmbiguous;
+  const needsSetup =
+    type === 'docker' ? devCmd == null || portVarsAmbiguous : devCmd == null;
 
   return { type, devCmd, portVars, needsSetup };
 }
