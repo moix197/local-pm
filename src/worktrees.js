@@ -60,16 +60,30 @@ function toWorktree(project, entry) {
   };
 }
 
+/**
+ * Synthetic single-row stand-in for a project that has no git worktrees (plain
+ * folder, or `git worktree list` failed/empty). Lets the project root itself
+ * appear as a startable target instead of rendering zero rows. The branch label
+ * falls back to the project's `type` (e.g. 'plain'/'docker') or '(root)'.
+ */
+function toRootWorktree(project) {
+  return toWorktree(project, { path: project.root, branch: project.type || '(root)' });
+}
+
 async function getProjectWorktrees(project) {
   if (!project.exists) return [];
+  let entries = [];
   try {
     const { stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain'], {
       cwd: project.root,
     });
-    return parseWorktreePorcelain(stdout).map((entry) => toWorktree(project, entry));
+    entries = parseWorktreePorcelain(stdout).map((entry) => toWorktree(project, entry));
   } catch {
-    return [];
+    entries = [];
   }
+  // A project with no git worktrees still gets one synthetic row at its root so
+  // it shows up; git projects with real worktrees are returned unchanged.
+  return entries.length > 0 ? entries : [toRootWorktree(project)];
 }
 
 /**

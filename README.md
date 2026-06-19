@@ -140,6 +140,7 @@ curl -X POST -H "Authorization: Bearer <token>" http://localhost:7420/api/stop
 |---|---|---|---|
 | GET | `/api/state` | — | `{ worktrees, running, lanUrl, serverPort }` |
 | GET | `/api/logs` | `?path=<worktree>` | `{ logs: string[] }` for that server |
+| GET | `/api/browse` | `?path=<dir>` (optional) | `{ path, parent, drives, entries }` — subdirectories only (used by the **Browse…** folder picker); `400` if not a directory |
 | POST | `/api/start` | `{ path }` | status for that path (pool port assigned) |
 | POST | `/api/stop` | `{ path }` (optional) | with `path`: stop that server; without: stop all |
 | POST | `/api/command` | `{ path, cmd, label }` | runs a command in that worktree (per-target `409` only — a command in another worktree never blocks this one) |
@@ -307,8 +308,13 @@ server's port (`null` when nothing is running).
 
 ### From the UI (recommended)
 
-The **Add project** panel at the top of the dashboard takes a folder path. On
-**Add**, the server:
+The **Add project** panel at the top of the dashboard takes a folder path. You
+can either **paste** the path (surrounding quotes from Windows "Copy as path" are
+stripped automatically) or click **Browse…** to navigate the host filesystem and
+pick a folder — the browser shows subfolders only, marks project-looking folders,
+offers an **Up** control and (on Windows) a drive switcher, and **Use this
+folder** drops the current path into the input and adds it. On **Add**, the
+server:
 
 1. **Validates the path** is a real existing directory (`fs.stat`). A bad path
    returns `400` and the panel shows the error — nothing is saved.
@@ -326,6 +332,10 @@ The **Add project** panel at the top of the dashboard takes a folder path. On
 
 The detected dev command is returned to the UI and shown on each stopped
 worktree row (`starts: <cmd>`) so you can see exactly what **Start** will spawn.
+
+A **plain (non-git) project** has no git worktrees, so it shows up as a **single
+row at its own root** (labelled with its type, e.g. `plain`) rather than
+rendering nothing — that one row is the startable target.
 
 #### Setup form fallback
 

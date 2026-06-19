@@ -63,6 +63,30 @@ test('getWorktrees: non-existent project root contributes nothing (no throw)', a
   assert.deepEqual(result, []);
 });
 
+test('getWorktrees: plain (non-git) project yields exactly one synthetic root row', async () => {
+  // A path that exists but is not a git repo → `git worktree list` fails, so the
+  // project must contribute a single synthetic row at its own root.
+  const root = 'C:/Windows';
+  const projects = [{ name: 'plainy', root, type: 'plain', exists: true }];
+  const result = await getWorktrees(projects);
+  assert.equal(result.length, 1, 'exactly one synthetic row');
+  const [row] = result;
+  assert.equal(row.project, 'plainy');
+  assert.equal(row.path, root);
+  assert.equal(row.branch, 'plain', 'branch label falls back to project type');
+  assert.equal(typeof row.hasNodeModules, 'boolean');
+  assert.ok(Array.isArray(row.commands));
+});
+
+test('getWorktrees: git project with worktrees is unchanged (no synthetic row added)', async () => {
+  // This repo IS a git worktree, so it yields real rows — none synthetic, none
+  // labelled with the project type, and never duplicated to a single root row.
+  const projects = [{ name: 'self', root: 'C:/proyectos/local_pm', type: 'plain', exists: true }];
+  const result = await getWorktrees(projects);
+  assert.ok(result.length >= 1);
+  assert.ok(result.some((w) => w.branch !== 'plain'), 'real branch labels present, not the synthetic type');
+});
+
 test('getWorktrees: groups worktrees per project and skips missing roots', async () => {
   const projects = [
     { name: 'present', root: 'C:/proyectos/local_pm', exists: true },

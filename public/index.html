@@ -137,6 +137,39 @@
       }
       .setup-form input[type="text"]:focus { outline: none; border-color: var(--accent); }
       .setup-form .actions { margin-top: 12px; display: flex; gap: 8px; }
+      .browser {
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px dashed var(--border);
+        border-radius: 6px;
+      }
+      .browser .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .browser .cwd { color: var(--text); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .browser .drives { display: flex; gap: 4px; }
+      .browser .drives button { padding: 4px 8px; }
+      .browser .browse-error { color: var(--red); font-size: 13px; margin-bottom: 8px; }
+      .browser .browse-error:empty { display: none; }
+      .browser .dir-list {
+        max-height: 260px;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #010409;
+      }
+      .browser .dir-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border);
+      }
+      .browser .dir-item:last-child { border-bottom: none; }
+      .browser .dir-item:hover { background: var(--panel); }
+      .browser .dir-item.is-project { color: var(--accent); }
+      .browser .dir-item .tag { font-size: 11px; color: var(--accent); margin-left: auto; }
+      .browser .dir-empty { padding: 10px; color: var(--muted); font-size: 12px; }
+      .browser .actions { margin-top: 12px; display: flex; gap: 8px; }
       .devcmd { color: var(--muted); font-size: 12px; white-space: nowrap; }
       .devcmd code { color: var(--text); }
       .row-icons { display: flex; gap: 4px; }
@@ -228,9 +261,11 @@
         <h2>Add project</h2>
         <div class="add-row">
           <input id="addPath" type="text" placeholder="C:/path/to/project folder" autocomplete="off" />
+          <button id="browseBtn">Browse…</button>
           <button id="addBtn" class="start">Add</button>
         </div>
         <div id="addError" class="add-error"></div>
+        <div id="browsePanel"></div>
         <div id="addSetup"></div>
       </div>
       <div id="projects"></div>
@@ -697,9 +732,148 @@
         return form;
       }
 
+      // Windows "Copy as path" wraps the value in double quotes; strip surrounding
+      // single/double quotes (and whitespace) so fs.stat does not 400 on them.
+      function cleanPath(raw) {
+        return raw.trim().replace(/^["']+|["']+$/g, '').trim();
+      }
+
+      // --- Folder browser -----------------------------------------------------
+      // Path currently shown in the browser panel; drives the "Use this folder"
+      // action. The panel lives in the static #browsePanel container so it
+      // survives the 2s poll (which only rebuilds #projects).
+      let browseCwd = null;
+
+      async function fetchBrowse(dirPath) {
+        const qs = dirPath ? '?path=' + encodeURIComponent(dirPath) : '';
+        const res = await fetch('/api/browse' + qs, { headers: authHeaders() });
+        if (res.status === 401) throw new AuthError('unauthorized');
+        const body = await res.json().catch(() => ({}));
+        return { ok: res.ok, body };
+      }
+
+      function closeBrowser() {
+        browseCwd = null;
+        document.getElementById('browsePanel').innerHTML = '';
+      }
+
+      async function openBrowser(dirPath) {
+        try {
+          const { ok, body } = await fetchBrowse(dirPath);
+          if (!ok) {
+            renderBrowser({ error: body.error ?? 'Could not list folder.' });
+            return;
+          }
+          browseCwd = body.path;
+          renderBrowser(body);
+        } catch (err) {
+          if (err instanceof AuthError) return renderAuthError();
+          renderBrowser({ error: 'Could not reach server.' });
+        }
+      }
+
+      function makeDriveSwitcher(drives) {
+        const wrap = document.createElement('span');
+        wrap.className = 'drives';
+        for (const drive of drives) {
+          const btn = document.createElement('button');
+          btn.textContent = drive.replace(/\/$/, '');
+          btn.onclick = () => openBrowser(drive);
+          wrap.appendChild(btn);
+        }
+        return wrap;
+      }
+
+      function makeDirItem(entry) {
+        const item = document.createElement('div');
+        item.className = 'dir-item' + (entry.isProject ? ' is-project' : '');
+        const name = document.createElement('span');
+        name.textContent = entry.name;
+        item.appendChild(name);
+        if (entry.isProject) {
+          const tag = document.createElement('span');
+          tag.className = 'tag';
+          tag.textContent = 'project';
+          item.appendChild(tag);
+        }
+        item.onclick = () => openBrowser(joinBrowsePath(entry.name));
+        return item;
+      }
+
+      function joinBrowsePath(name) {
+        const base = browseCwd.replace(/[\\/]+$/, '');
+        return base + '/' + name;
+      }
+
+      function renderBrowser(data) {
+        const panel = document.getElementById('browsePanel');
+        panel.innerHTML = '';
+        const box = document.createElement('div');
+        box.className = 'browser';
+
+        const crumbs = document.createElement('div');
+        crumbs.className = 'crumbs';
+        const up = document.createElement('button');
+        up.textContent = '↑ Up';
+        up.disabled = !data.parent;
+        up.onclick = () => openBrowser(data.parent);
+        crumbs.appendChild(up);
+        const cwd = document.createElement('span');
+        cwd.className = 'cwd';
+        cwd.title = data.path ?? '';
+        cwd.textContent = data.path ?? '';
+        crumbs.appendChild(cwd);
+        if ((data.drives ?? []).length) crumbs.appendChild(makeDriveSwitcher(data.drives));
+        box.appendChild(crumbs);
+
+        const error = document.createElement('div');
+        error.className = 'browse-error';
+        error.textContent = data.error ?? '';
+        box.appendChild(error);
+
+        if (data.path) {
+          const list = document.createElement('div');
+          list.className = 'dir-list';
+          const entries = data.entries ?? [];
+          if (entries.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'dir-empty';
+            empty.textContent = 'No subfolders.';
+            list.appendChild(empty);
+          } else {
+            for (const entry of entries) list.appendChild(makeDirItem(entry));
+          }
+          box.appendChild(list);
+
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          const use = document.createElement('button');
+          use.className = 'start';
+          use.textContent = 'Use this folder';
+          use.onclick = () => {
+            document.getElementById('addPath').value = browseCwd;
+            closeBrowser();
+            submitAddProject();
+          };
+          const close = document.createElement('button');
+          close.textContent = 'Close';
+          close.onclick = closeBrowser;
+          actions.append(use, close);
+          box.appendChild(actions);
+        }
+
+        panel.appendChild(box);
+      }
+
+      function toggleBrowser() {
+        if (browseCwd !== null) { closeBrowser(); return; }
+        const seed = cleanPath(document.getElementById('addPath').value);
+        openBrowser(seed || undefined);
+      }
+
       async function submitAddProject() {
         const input = document.getElementById('addPath');
-        const folderPath = input.value.trim();
+        const folderPath = cleanPath(input.value);
         if (!folderPath) return;
         setAddError('');
         clearSetup();
@@ -847,6 +1021,7 @@
       }
 
       document.getElementById('addBtn').addEventListener('click', submitAddProject);
+      document.getElementById('browseBtn').addEventListener('click', toggleBrowser);
       document.getElementById('addPath').addEventListener('keydown', e => {
         if (e.key === 'Enter') submitAddProject();
       });

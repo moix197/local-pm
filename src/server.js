@@ -17,6 +17,7 @@ import { getLanIPv4 } from './netinfo.js';
 import { ensureToken, isAuthorized } from './token.js';
 import { loadProjects, addProject, removeProject, updateProject } from './config.js';
 import { autoDetectProject } from './detect.js';
+import { listDirectory } from './browse.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const indexHtml = path.join(repoRoot, 'public', 'index.html');
@@ -67,6 +68,15 @@ function handleLogs(url, res) {
   const worktreePath = url.searchParams.get('path');
   if (!worktreePath) return sendJson(res, 400, { error: 'path is required' });
   sendJson(res, 200, { logs: getLogs(worktreePath) });
+}
+
+function handleBrowse(url, res) {
+  const dirPath = url.searchParams.get('path');
+  try {
+    sendJson(res, 200, listDirectory(dirPath));
+  } catch (err) {
+    sendJson(res, 400, { error: err.message });
+  }
 }
 
 async function handleStart(req, res) {
@@ -184,6 +194,7 @@ async function route(req, res) {
   if (method === 'GET' && url.pathname === '/') return serveIndex(res);
   if (method === 'GET' && url.pathname === '/api/state') return handleState(res);
   if (method === 'GET' && url.pathname === '/api/logs') return handleLogs(url, res);
+  if (method === 'GET' && url.pathname === '/api/browse') return handleBrowse(url, res);
   if (method === 'POST' && url.pathname === '/api/start') return handleStart(req, res);
   if (method === 'POST' && url.pathname === '/api/stop') return handleStop(req, res);
   if (method === 'POST' && url.pathname === '/api/command') return handleCommand(req, res);

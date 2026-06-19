@@ -231,6 +231,33 @@ describe('GET /api/logs', () => {
   });
 });
 
+describe('GET /api/browse', () => {
+  it('returns 401 without a Bearer token', async () => {
+    const res = await fetch(`${baseUrl}/api/browse?path=${encodeURIComponent(repoRoot)}`);
+    assert.equal(res.status, 401);
+  });
+
+  it('returns a listing for a valid directory', async () => {
+    const res = await fetch(`${baseUrl}/api/browse?path=${encodeURIComponent(repoRoot)}`, {
+      headers: auth(),
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.path, repoRoot);
+    assert.ok(Array.isArray(body.entries), 'entries is an array');
+    assert.ok(Array.isArray(body.drives), 'drives is an array');
+    assert.ok(body.entries.every((e) => typeof e.name === 'string' && typeof e.isProject === 'boolean'));
+    assert.ok(body.entries.some((e) => e.name === 'src'), 'lists the src subdirectory');
+  });
+
+  it('returns 400 for an invalid directory', async () => {
+    const res = await fetch(`${baseUrl}/api/browse?path=${encodeURIComponent('C:/nope/nowhere/at/all')}`, {
+      headers: auth(),
+    });
+    assert.equal(res.status, 400);
+  });
+});
+
 describe('POST /api/stop', () => {
   it('stops only the given path when a path is supplied', async () => {
     const wt = await knownWorktreePath();
