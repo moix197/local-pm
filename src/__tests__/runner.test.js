@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as runner from '../runner.js';
 import { extractPortFromLogLine } from '../runner.js';
+import { _setIsPortFreeFn, _resetIsPortFreeFn } from '../ports.js';
 
 // ---------------------------------------------------------------------------
 // Stub helpers
@@ -60,6 +61,8 @@ function stubAll() {
   runner._setDockerDownFn(async () => {});
   runner._setDockerRunningFn(async () => true);
   runner._setSpawnFn(() => makeChild(0, true));
+  // Stub OS port probes so tests don't open real sockets.
+  _setIsPortFreeFn(async () => true);
 }
 
 beforeEach(async () => {
@@ -113,11 +116,16 @@ describe('getStatus', () => {
     const fakePath = 'C:\\fake\\worktreeB';
     const startP = runner.startServer(fakePath, {});
 
-    await Promise.resolve();
-    await Promise.resolve();
+    // Pump enough microticks to let startServer reach runNpmInstall's await.
+    // assignPort now does an async OS probe (async () => true) which adds two extra
+    // microtick hops (one for isPortFree, one for assignPort's await chain).
+    await Promise.resolve(); // isPortFree resolves
+    await Promise.resolve(); // assignPort / buildEnvForTarget resume
+    await Promise.resolve(); // startServer resumes, calls runNpmInstall, installChild set
     assert.equal(runner.getStatus(fakePath).installing, true);
 
-    installChild?.emit('close');
+    assert.ok(installChild != null, 'installChild must be set before emitting close');
+    installChild.emit('close');
     await startP;
     assert.equal(runner.getStatus(fakePath).installing, false);
   });
@@ -290,7 +298,12 @@ describe('concurrent servers', () => {
     const r2 = await p2;
     assert.equal(r2.active, null, 'second call returns idle while first is in flight');
 
-    installChild?.emit('close');
+    // Pump extra ticks so p1's assignPort async chain fully resolves and installChild is set
+    // before emitting close (assignPort now does an async OS probe).
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.ok(installChild != null, 'installChild must be set before emitting close');
+    installChild.emit('close');
     await p1;
 
     assert.notEqual(runner.getStatus(fakePath).active, null, 'first start should succeed');

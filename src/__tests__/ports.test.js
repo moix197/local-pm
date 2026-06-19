@@ -1,13 +1,17 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import os from 'node:os';
 import {
   assignPort,
+  isPortFree,
   releasePort,
   scanComposePortVars,
   buildEnvForTarget,
+  _setIsPortFreeFn,
+  _resetIsPortFreeFn,
 } from '../ports.js';
 
 const POOL_START = 3100;
@@ -16,7 +20,7 @@ const POOL_END = 3199;
 // Tracks paths assigned within a test so afterEach can free the shared pool.
 const assignedInTest = new Set();
 
-function assign(p) {
+async function assign(p) {
   assignedInTest.add(p);
   return assignPort(p);
 }
@@ -54,10 +58,10 @@ function makeTmp(content, isCompose = false) {
 // ---------------------------------------------------------------------------
 
 describe('assignPort', () => {
-  it('allocates distinct ports for distinct paths', () => {
-    const a = assign('C:\\wt\\a');
-    const b = assign('C:\\wt\\b');
-    const c = assign('C:\\wt\\c');
+  it('allocates distinct ports for distinct paths', async () => {
+    const a = await assign('C:\\wt\\a');
+    const b = await assign('C:\\wt\\b');
+    const c = await assign('C:\\wt\\c');
     assert.notEqual(a, b);
     assert.notEqual(b, c);
     assert.notEqual(a, c);
@@ -66,32 +70,65 @@ describe('assignPort', () => {
     }
   });
 
-  it('returns the same port when called again for an already-assigned path', () => {
-    const first = assign('C:\\wt\\same');
-    const second = assign('C:\\wt\\same');
+  it('returns the same port when called again for an already-assigned path', async () => {
+    const first = await assign('C:\\wt\\same');
+    const second = await assign('C:\\wt\\same');
     assert.equal(first, second);
   });
 
-  it('throws a descriptive error when the pool is exhausted', () => {
-    // Fill every slot.
-    for (let i = 0; i <= POOL_END - POOL_START; i += 1) assign('C:\\wt\\fill-' + i);
-    assert.throws(
-      () => assign('C:\\wt\\overflow'),
-      /pool exhausted/i,
-      'exhausted pool must throw',
-    );
+  it('throws a descriptive error when the pool is exhausted', async () => {
+    // Stub OS probes to always return true so filling all 100 slots
+    // doesn't require opening real sockets — avoids slow/flaky OS calls.
+    _setIsPortFreeFn(async () => true);
+    try {
+      for (let i = 0; i <= POOL_END - POOL_START; i += 1) await assign('C:\\wt\\fill-' + i);
+      await assert.rejects(
+        () => assign('C:\\wt\\overflow'),
+        /pool exhausted/i,
+        'exhausted pool must throw',
+      );
+    } finally {
+      _resetIsPortFreeFn();
+    }
+  });
+
+  it('skips a port that is already bound on the OS', async () => {
+    // Find a port in the pool that is genuinely free before occupying it,
+    // so the test is robust even if some pool ports are in use on the machine.
+    let targetPort = null;
+    for (let p = POOL_START; p <= POOL_END; p += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      if (await isPortFree(p)) { targetPort = p; break; }
+    }
+    assert.ok(targetPort != null, 'at least one pool port must be free to run this test');
+
+    // Occupy targetPort so the OS considers it taken.
+    const blocker = net.createServer();
+    await new Promise((resolve, reject) => {
+      blocker.once('listening', resolve);
+      blocker.once('error', reject);
+      blocker.listen(targetPort);
+    });
+
+    try {
+      const port = await assign('C:\\wt\\os-probe');
+      assert.notEqual(port, targetPort, `assignPort must skip OS-occupied port ${targetPort}`);
+      assert.ok(port >= POOL_START && port <= POOL_END, `assigned port ${port} must be in pool range`);
+    } finally {
+      await new Promise((resolve) => blocker.close(resolve));
+    }
   });
 });
 
 describe('releasePort', () => {
-  it('frees the slot so the same port can be reassigned', () => {
+  it('frees the slot so the same port can be reassigned', async () => {
     const p = 'C:\\wt\\release';
-    const port = assign(p);
+    const port = await assign(p);
     releasePort(p);
     assignedInTest.delete(p);
     // After release, a brand-new path should be able to take that exact port
     // (it is the lowest free slot again once nothing else is allocated).
-    const reclaimed = assign('C:\\wt\\reclaim');
+    const reclaimed = await assign('C:\\wt\\reclaim');
     assert.equal(reclaimed, port, 'released port is reusable');
   });
 
@@ -153,37 +190,37 @@ describe('scanComposePortVars', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildEnvForTarget', () => {
-  it('git-wt type returns no PORT or WS_PORT — does not impose a port', () => {
+  it('git-wt type returns no PORT or WS_PORT — does not impose a port', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
     tmpDirs.push(tmpDir);
-    const env = buildEnvForTarget({ project: 'proj', branch: 'feat/dev-otp-echo', path: tmpDir, type: 'git-wt' });
+    const env = await buildEnvForTarget({ project: 'proj', branch: 'feat/dev-otp-echo', path: tmpDir, type: 'git-wt' });
     assert.ok(!('PORT' in env), 'PORT must NOT be set for git-wt target');
     assert.ok(!('WS_PORT' in env), 'WS_PORT must NOT be set for git-wt target');
   });
 
-  it('git-wt type without compose file returns empty env {}', () => {
+  it('git-wt type without compose file returns empty env {}', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
     tmpDirs.push(tmpDir);
-    const env = buildEnvForTarget({ project: 'proj', branch: 'main', path: tmpDir, type: 'git-wt' });
+    const env = await buildEnvForTarget({ project: 'proj', branch: 'main', path: tmpDir, type: 'git-wt' });
     assert.deepEqual(env, {}, 'no compose file → empty env for git-wt');
   });
 
-  it('git-wt type sets COMPOSE_PROJECT_NAME when compose file is present', () => {
+  it('git-wt type sets COMPOSE_PROJECT_NAME when compose file is present', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
     tmpDirs.push(tmpDir);
     fs.writeFileSync(
       path.join(tmpDir, 'docker-compose.yml'),
       'version: "3"\nservices:\n  app:\n    image: node:22\n    ports:\n      - "${APP_PORT}:3000"\n',
     );
-    const env = buildEnvForTarget({ project: 'myproj', branch: 'main', path: tmpDir, type: 'git-wt' });
+    const env = await buildEnvForTarget({ project: 'myproj', branch: 'main', path: tmpDir, type: 'git-wt' });
     assert.ok(!('PORT' in env), 'PORT must NOT be set for git-wt target even with compose');
     assert.ok(!('WS_PORT' in env), 'WS_PORT must NOT be set for git-wt target even with compose');
     assert.ok(env.COMPOSE_PROJECT_NAME, 'COMPOSE_PROJECT_NAME should be set when compose file exists');
     assert.ok(env.COMPOSE_PROJECT_NAME.startsWith('myproj'), 'project name in COMPOSE_PROJECT_NAME');
   });
 
-  it('plain type returns PORT from pool', () => {
-    const env = buildEnvForTarget({ project: 'p', branch: 'b', path: 'C:\\fake\\plain', type: 'plain' });
+  it('plain type returns PORT from pool', async () => {
+    const env = await buildEnvForTarget({ project: 'p', branch: 'b', path: 'C:\\fake\\plain', type: 'plain' });
     assignedInTest.add('C:\\fake\\plain');
     assert.ok(env.PORT, 'PORT should be set');
     const port = Number(env.PORT);
@@ -191,11 +228,11 @@ describe('buildEnvForTarget', () => {
     assert.ok(!env.COMPOSE_PROJECT_NAME, 'plain type should not set COMPOSE_PROJECT_NAME');
   });
 
-  it('docker type assigns pool ports per compose var and sets COMPOSE_PROJECT_NAME', () => {
+  it('docker type assigns pool ports per compose var and sets COMPOSE_PROJECT_NAME', async () => {
     const content = 'version: "3"\nservices:\n  app:\n    image: node:22\n    ports:\n      - "${APP_PORT}:3000"\n';
     const tmpDir = makeFakeProjectWithCompose(content);
     tmpDirs.push(tmpDir);
-    const env = buildEnvForTarget({ project: 'proj', branch: 'main', path: tmpDir, type: 'docker' });
+    const env = await buildEnvForTarget({ project: 'proj', branch: 'main', path: tmpDir, type: 'docker' });
     // Register composite keys for cleanup
     assignedInTest.add(`${tmpDir}:APP_PORT`);
     assert.ok(env.APP_PORT, 'APP_PORT should be assigned from pool');
@@ -204,7 +241,7 @@ describe('buildEnvForTarget', () => {
     assert.ok(env.COMPOSE_PROJECT_NAME, 'COMPOSE_PROJECT_NAME should be set');
   });
 
-  it('docker type pool ports are fully freed after releasePort — no leak across start→stop→start', () => {
+  it('docker type pool ports are fully freed after releasePort — no leak across start→stop→start', async () => {
     const content =
       'version: "3"\nservices:\n  app:\n    image: node:22\n    ports:\n      - "${APP_PORT}:3000"\n      - "${WS_HOST_PORT}:3001"\n';
     const tmpDir = makeFakeProjectWithCompose(content);
@@ -213,7 +250,7 @@ describe('buildEnvForTarget', () => {
     const worktree = { project: 'proj', branch: 'main', path: tmpDir, type: 'docker' };
 
     // First start — allocates composite keys.
-    const env1 = buildEnvForTarget(worktree);
+    const env1 = await buildEnvForTarget(worktree);
     const port1 = Number(env1.APP_PORT);
     assert.ok(port1 >= POOL_START && port1 <= POOL_END, 'first APP_PORT in pool range');
 
@@ -221,7 +258,7 @@ describe('buildEnvForTarget', () => {
     releasePort(tmpDir);
 
     // Second start — must succeed (pool not leaked) and can reuse the same slots.
-    const env2 = buildEnvForTarget(worktree);
+    const env2 = await buildEnvForTarget(worktree);
     assert.ok(env2.APP_PORT, 'APP_PORT assigned on second start');
     assert.ok(env2.WS_HOST_PORT, 'WS_HOST_PORT assigned on second start');
     // Clean up second allocation.

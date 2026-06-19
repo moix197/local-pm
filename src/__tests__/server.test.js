@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { server } from '../server.js';
 import { ensureToken } from '../token.js';
 import * as runner from '../runner.js';
-import { assignPort, releasePort } from '../ports.js';
+import { assignPort, releasePort, _setIsPortFreeFn, _resetIsPortFreeFn } from '../ports.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const projectsFile = path.join(repoRoot, 'projects.json');
@@ -405,10 +405,12 @@ describe('POST /api/start pool exhaustion', () => {
     const POOL_START = 3100;
     const POOL_END = 3199;
     const filledKeys = [];
+    // Stub OS probes so filling all slots doesn't require opening real sockets.
+    _setIsPortFreeFn(async () => true);
     // Fill every slot in the pool so the next assignPort throws.
     for (let i = 0; i <= POOL_END - POOL_START; i += 1) {
       const key = `__fill__${i}`;
-      assignPort(key);
+      await assignPort(key);
       filledKeys.push(key);
     }
     try {
@@ -422,6 +424,7 @@ describe('POST /api/start pool exhaustion', () => {
       const body = await res.json();
       assert.ok(/pool exhausted/i.test(body.error), `expected pool-exhausted message, got: ${body.error}`);
     } finally {
+      _resetIsPortFreeFn();
       for (const key of filledKeys) releasePort(key);
     }
   });

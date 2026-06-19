@@ -1,5 +1,6 @@
 import { getAllStatuses } from './runner.js';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 
 const POOL_START = 3100;
@@ -21,23 +22,50 @@ function inUsePorts() {
 }
 
 /**
+ * Probe whether a port is free to bind on the OS.
+ * Returns true if the port is available, false if EADDRINUSE or any other listen error.
+ * Small race: the probe briefly binds then closes — another process could claim the port
+ * between close and the dev server's own listen, but that is an acceptable edge case.
+ * @param {number} port
+ * @returns {Promise<boolean>}
+ */
+export function isPortFree(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('listening', () => { server.close(() => resolve(true)); });
+    server.once('error', () => resolve(false));
+    server.listen(port);
+  });
+}
+
+// Injectable seam — replaced in unit tests so the exhaustion test does not open
+// 100 OS sockets. Defaults to the real OS probe.
+let _isPortFree = isPortFree;
+
+/** @internal — unit tests only */
+export function _setIsPortFreeFn(fn) { _isPortFree = fn; }
+/** @internal — unit tests only */
+export function _resetIsPortFreeFn() { _isPortFree = isPortFree; }
+
+/**
  * Reserve the first free port in the 3100–3199 pool for `worktreePath`.
- * In-process only — does NOT probe the OS for ports held by unrelated processes
- * (acceptable single-instance assumption for a LAN tool). Re-assigning an
- * already-allocated path returns its existing port.
+ * Skips ports already in local-pm's allocation set AND ports already bound on the OS
+ * (checked via a bind probe), so externally-started or orphaned servers don't collide.
+ * Re-assigning an already-allocated path returns its existing port synchronously.
  * @param {string} worktreePath
- * @returns {number} the assigned port
+ * @returns {Promise<number>} the assigned port
  * @throws {Error} when every slot in the pool is taken
  */
-export function assignPort(worktreePath) {
+export async function assignPort(worktreePath) {
   const existing = allocated.get(worktreePath);
   if (existing != null) return existing;
   const taken = inUsePorts();
   for (let port = POOL_START; port <= POOL_END; port += 1) {
-    if (!taken.has(port)) {
-      allocated.set(worktreePath, port);
-      return port;
-    }
+    if (taken.has(port)) continue;
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await _isPortFree(port))) continue;
+    allocated.set(worktreePath, port);
+    return port;
   }
   throw new Error(
     `port pool exhausted: all ${POOL_END - POOL_START + 1} slots (${POOL_START}–${POOL_END}) are in use`,
@@ -171,7 +199,7 @@ function hasComposeFile(dirPath) {
  * @param {{ project: string, branch: string, path: string, type?: string }} worktree
  * @returns {Record<string, string>}
  */
-export function buildEnvForTarget(worktree) {
+export async function buildEnvForTarget(worktree) {
   const { project, branch, path: wtPath, type } = worktree;
 
   if (type === 'git-wt') {
@@ -190,7 +218,8 @@ export function buildEnvForTarget(worktree) {
     const env = {};
     for (const { varName } of vars) {
       const key = `${wtPath}:${varName}`;
-      const port = assignPort(key);
+      // eslint-disable-next-line no-await-in-loop
+      const port = await assignPort(key);
       env[varName] = String(port);
     }
     env.COMPOSE_PROJECT_NAME = slugify(`${project}-${branch}`);
@@ -198,6 +227,6 @@ export function buildEnvForTarget(worktree) {
   }
 
   // Plain: single PORT from the pool.
-  const port = assignPort(wtPath);
+  const port = await assignPort(wtPath);
   return { PORT: String(port) };
 }

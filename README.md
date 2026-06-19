@@ -137,9 +137,10 @@ curl -X POST -H "Authorization: Bearer <token>" http://localhost:7420/api/stop
 | POST | `/api/command/stop` | `{ path }` | stops that worktree's running command |
 
 If the port pool (3100–3199) is fully allocated, `/api/start` returns `503` with a
-descriptive error. Port allocation is **in-process only** — it tracks ports local-pm
-itself assigned and does not probe the OS for ports held by unrelated processes
-(acceptable for a single-instance LAN tool).
+descriptive error. Port allocation combines two checks: local-pm's in-process Map
+(prevents handing the same port to two simultaneous starts before either binds) and
+an OS bind-probe via `node:net` (skips ports already held by orphaned or externally-started
+servers). A port is only assigned when it passes both checks.
 
 Without a valid token these endpoints return `401 {"error":"Unauthorized"}`.
 

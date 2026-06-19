@@ -248,7 +248,7 @@ export async function startServer(worktreePath, meta) {
     }
     if (active.has(worktreePath)) await stopServer(worktreePath);
     const safeMeta = { project: null, branch: null, type: 'plain', ...(meta ?? {}), path: worktreePath };
-    const derivedEnv = buildEnvForTarget(safeMeta);
+    const derivedEnv = await buildEnvForTarget(safeMeta);
     if (!fs.existsSync(path.join(worktreePath, 'node_modules'))) {
       await runNpmInstall(worktreePath, derivedEnv);
     }
