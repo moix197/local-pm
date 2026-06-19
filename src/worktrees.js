@@ -55,6 +55,7 @@ function toWorktree(project, entry) {
     project: project.name,
     branch: entry.branch,
     path: entry.path,
+    type: project.type ?? 'plain',
     hasNodeModules: fs.existsSync(path.join(entry.path, 'node_modules')),
     commands: mergeCommands(project.commands),
   };

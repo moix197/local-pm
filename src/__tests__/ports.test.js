@@ -8,6 +8,7 @@ import {
   assignPort,
   releasePort,
   readGitWtOffset,
+  resolveGitCommonDir,
   scanComposePortVars,
   buildEnvForTarget,
 } from '../ports.js';
@@ -111,6 +112,56 @@ describe('releasePort', () => {
 });
 
 // ---------------------------------------------------------------------------
+// resolveGitCommonDir
+// ---------------------------------------------------------------------------
+
+describe('resolveGitCommonDir', () => {
+  it('returns the .git directory path when .git is a directory', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
+    tmpDirs.push(tmpDir);
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    const result = resolveGitCommonDir(tmpDir);
+    assert.equal(result, path.join(tmpDir, '.git'));
+  });
+
+  it('follows .git file pointer to commondir for linked worktrees', () => {
+    // Set up a fake "main repo" with a .git directory
+    const mainRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-main-'));
+    tmpDirs.push(mainRepo);
+    fs.mkdirSync(path.join(mainRepo, '.git'));
+
+    // Set up a fake "linked worktree" where .git is a file pointing at a gitdir
+    const linkedWt = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-linked-'));
+    tmpDirs.push(linkedWt);
+
+    // The gitdir points to a subdirectory inside the main .git
+    const gitdirPath = path.join(mainRepo, '.git', 'worktrees', 'linked');
+    fs.mkdirSync(gitdirPath, { recursive: true });
+
+    // Write .git file in linked worktree
+    fs.writeFileSync(path.join(linkedWt, '.git'), `gitdir: ${gitdirPath}`);
+
+    // Write commondir file inside the gitdir (relative path from gitdir to .git)
+    // gitdirPath = mainRepo/.git/worktrees/linked
+    // common dir = mainRepo/.git
+    // relative from gitdir to common = ../..
+    fs.writeFileSync(path.join(gitdirPath, 'commondir'), '../..');
+
+    const result = resolveGitCommonDir(linkedWt);
+    assert.equal(result, path.resolve(gitdirPath, '../..'));
+    // Should resolve to mainRepo/.git
+    assert.equal(result, path.join(mainRepo, '.git'));
+  });
+
+  it('returns null when .git does not exist', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
+    tmpDirs.push(tmpDir);
+    const result = resolveGitCommonDir(tmpDir);
+    assert.equal(result, null);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // readGitWtOffset
 // ---------------------------------------------------------------------------
 
@@ -193,23 +244,61 @@ describe('scanComposePortVars', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildEnvForTarget', () => {
-  it('git-wt type with valid offset computes port as offset+base for each var', () => {
-    // tmpDir has both .git/git-wt-ports.json (offset 10 for main) and docker-compose.yml
+  it('git-wt type with valid offset sets PORT and WS_PORT via basePort + offset * increment', () => {
+    // tmpDir has .git/git-wt-ports.json (offset 10 for main) — new allocations format
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
     tmpDirs.push(tmpDir);
     fs.mkdirSync(path.join(tmpDir, '.git'));
     fs.writeFileSync(
       path.join(tmpDir, '.git', 'git-wt-ports.json'),
-      JSON.stringify({ main: 10 }),
+      JSON.stringify({
+        allocations: { main: { branch: 'main', offset: 10 } },
+        nextOffset: 11,
+      }),
+    );
+    const env = buildEnvForTarget({ project: 'myproj', branch: 'main', path: tmpDir, type: 'git-wt' });
+    // Default config: basePort=3000, increment=100, envVars=[PORT, WS_PORT]
+    // port = 3000 + 10 * 100 = 4000
+    assert.equal(env.PORT, '4000', 'PORT = 3000 + 10*100');
+    assert.equal(env.WS_PORT, '4000', 'WS_PORT = 3000 + 10*100');
+    // No compose file present — COMPOSE_PROJECT_NAME must NOT be set
+    assert.ok(!env.COMPOSE_PROJECT_NAME, 'COMPOSE_PROJECT_NAME should not be set without compose file');
+  });
+
+  it('git-wt type with offset=0 (main branch) returns PORT=3000, not from pool', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
+    tmpDirs.push(tmpDir);
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(
+      path.join(tmpDir, '.git', 'git-wt-ports.json'),
+      JSON.stringify({
+        allocations: { main: { branch: 'main', offset: 0 } },
+        nextOffset: 1,
+      }),
+    );
+    const env = buildEnvForTarget({ project: 'proj', branch: 'main', path: tmpDir, type: 'git-wt' });
+    // offset=0 is valid: port = 3000 + 0*100 = 3000
+    assert.equal(env.PORT, '3000', 'offset 0 → PORT=3000, not from pool');
+    assert.equal(env.WS_PORT, '3000', 'offset 0 → WS_PORT=3000');
+  });
+
+  it('git-wt type sets COMPOSE_PROJECT_NAME when compose file is present', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
+    tmpDirs.push(tmpDir);
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(
+      path.join(tmpDir, '.git', 'git-wt-ports.json'),
+      JSON.stringify({
+        allocations: { main: { branch: 'main', offset: 10 } },
+        nextOffset: 11,
+      }),
     );
     fs.writeFileSync(
       path.join(tmpDir, 'docker-compose.yml'),
-      'version: "3"\nservices:\n  app:\n    image: node:22\n    ports:\n      - "${APP_PORT}:3000"\n      - "${WS_HOST_PORT}:3001"\n',
+      'version: "3"\nservices:\n  app:\n    image: node:22\n    ports:\n      - "${APP_PORT}:3000"\n',
     );
     const env = buildEnvForTarget({ project: 'myproj', branch: 'main', path: tmpDir, type: 'git-wt' });
-    assert.equal(env.APP_PORT, '3010', 'APP_PORT = 10 + 3000');
-    assert.equal(env.WS_HOST_PORT, '3011', 'WS_HOST_PORT = 10 + 3001');
-    assert.ok(env.COMPOSE_PROJECT_NAME, 'COMPOSE_PROJECT_NAME should be set');
+    assert.ok(env.COMPOSE_PROJECT_NAME, 'COMPOSE_PROJECT_NAME should be set when compose file exists');
     assert.ok(env.COMPOSE_PROJECT_NAME.startsWith('myproj'), 'project name in COMPOSE_PROJECT_NAME');
   });
 
@@ -246,7 +335,6 @@ describe('buildEnvForTarget', () => {
     // First start — allocates composite keys.
     const env1 = buildEnvForTarget(worktree);
     const port1 = Number(env1.APP_PORT);
-    const wsPort1 = Number(env1.WS_HOST_PORT);
     assert.ok(port1 >= POOL_START && port1 <= POOL_END, 'first APP_PORT in pool range');
 
     // Simulate stop — releasePort with bare path must free composite keys.

@@ -47,23 +47,28 @@ local-pm selects port assignments based on the worktree's `type` field (set in `
 
 | Type | How ports are assigned |
 |---|---|
-| `git-wt` | Reads `.git/git-wt-ports.json` in the project root. Each branch maps to a numeric offset. For each `${VAR}:PORT` entry in a compose file, sets `VAR = offset + PORT`. Falls back to pool if offset file is absent. |
+| `git-wt` | Reads `git-wt-ports.json` from the git common dir (shared across all linked worktrees). Uses git-wt config (`basePort`, `increment`, `envVars`) to compute `port = basePort + offset * increment` and injects that value into each configured env var (default: `PORT` and `WS_PORT`). Sets `COMPOSE_PROJECT_NAME` only when a compose file is present. Falls back to pool if offset file or branch entry is absent. |
 | `docker` | Scans compose files for `${VAR}:PORT` entries; assigns a pool port per variable. Sets `COMPOSE_PROJECT_NAME` so `docker compose down` is scoped to this worktree only. |
 | plain (default) | Assigns one port from the 3100–3199 pool and injects it as `PORT`. |
 
 ### git-wt offset file
 
-git-wt writes `.git/git-wt-ports.json` at the project root — a JSON object mapping branch names to integer offsets:
+git-wt writes `git-wt-ports.json` in the git **common dir** (`.git/` in the main worktree, shared by all linked worktrees). The file uses an `allocations` object keyed by branch name:
 
 ```json
 {
-  "main": 0,
-  "feat/my-feature": 10,
-  "hotfix": 20
+  "allocations": {
+    "main": { "branch": "main", "offset": 0 },
+    "feat/my-feature": { "branch": "feat/my-feature", "offset": 10 },
+    "hotfix": { "branch": "hotfix", "offset": 20 }
+  },
+  "nextOffset": 21
 }
 ```
 
-local-pm reads this file on start. If the branch key is missing or the file is absent, it falls back to pool assignment.
+Port formula: `basePort + offset * increment` (defaults: `basePort=3000`, `increment=100`). An offset of 0 is valid — it maps `main` to port 3000. git-wt also writes `.git-wt.json` at the project root to configure `basePort`, `increment`, and the list of env vars to populate (`envVars`, default `["PORT", "WS_PORT"]`).
+
+local-pm resolves the common dir correctly for both normal repos (`.git/` is a directory) and linked worktrees (`.git` is a file containing `gitdir: <path>`). If the branch key is missing or the file is absent, it falls back to pool assignment.
 
 ### Scoped docker compose down
 
@@ -382,9 +387,11 @@ contains invalid JSON, startup fails with a descriptive error
   collide.
 - **Dev mode only.**
 - Each plain server's dev `PORT` is injected from the pool; the worktree's dev script
-  must honour `PORT`. git-wt / docker targets instead receive their compose port vars
-  (e.g. `APP_PORT`, `WS_HOST_PORT`) — see [Hybrid port model](#hybrid-port-model). The
-  header `lanUrl` points at the first running server's port.
+  must honour `PORT`. git-wt targets receive the env vars listed in `.git-wt.json`
+  (`envVars`, default `PORT` and `WS_PORT`) computed from the branch offset. docker
+  targets receive their compose port vars (e.g. `APP_PORT`, `WS_HOST_PORT`) — see
+  [Hybrid port model](#hybrid-port-model). The header `lanUrl` points at the first
+  running server's port.
 - `docker compose down` is run on stop; its errors are ignored so worktrees without a
   compose file still stop cleanly.
 - Windows-specific: uses `npm.cmd`, `taskkill`, and `shell: true` for `.cmd` resolution.

@@ -1,0 +1,5 @@
+{
+  "basePort": 3000,
+  "increment": 100,
+  "envVars": ["PORT", "WS_PORT"]
+}

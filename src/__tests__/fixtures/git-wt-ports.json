@@ -1,5 +1,8 @@
 {
-  "main": 0,
-  "feat/my-feature": 10,
-  "hotfix": 20
+  "allocations": {
+    "main": { "branch": "main", "offset": 0 },
+    "feat/my-feature": { "branch": "feat/my-feature", "offset": 10 },
+    "hotfix": { "branch": "hotfix", "offset": 20 }
+  },
+  "nextOffset": 21
 }

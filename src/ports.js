@@ -59,14 +59,98 @@ export function releasePort(worktreePath) {
 }
 
 /**
- * Read the git-wt port offset for a given branch from `.git/git-wt-ports.json`.
- * Returns null (never throws) when file is absent, branch key is missing, or JSON is malformed.
- * @param {string} projectRoot
+ * Resolve the git "common dir" for a worktree path.
+ * - If <path>/.git is a directory → that IS the common dir.
+ * - If <path>/.git is a FILE → parse `gitdir: <X>`, then read <X>/commondir
+ *   (relative path from X to common dir) and resolve to absolute.
+ * Returns null when the common dir cannot be determined.
+ * @param {string} worktreePath
+ * @returns {string | null}
+ */
+export function resolveGitCommonDir(worktreePath) {
+  const gitPath = path.join(worktreePath, '.git');
+  let stat;
+  try {
+    stat = fs.statSync(gitPath);
+  } catch {
+    return null;
+  }
+  if (stat.isDirectory()) {
+    return gitPath;
+  }
+  // .git is a file — parse "gitdir: <absolute-path>"
+  let content;
+  try {
+    content = fs.readFileSync(gitPath, 'utf8').trim();
+  } catch {
+    return null;
+  }
+  const match = content.match(/^gitdir:\s*(.+)$/);
+  if (!match) return null;
+  const gitdirPath = match[1].trim();
+  const absGitdir = path.isAbsolute(gitdirPath)
+    ? gitdirPath
+    : path.resolve(worktreePath, gitdirPath);
+  // Read commondir file inside the gitdir
+  const commondirFile = path.join(absGitdir, 'commondir');
+  let commondirContent;
+  try {
+    commondirContent = fs.readFileSync(commondirFile, 'utf8').trim();
+  } catch {
+    return null;
+  }
+  // commondirContent is a relative path from absGitdir to the common dir
+  return path.resolve(absGitdir, commondirContent);
+}
+
+const GIT_WT_DEFAULTS = { basePort: 3000, increment: 100, envVars: ['PORT', 'WS_PORT'] };
+
+/**
+ * Load git-wt config from <commonDir-parent>/.git-wt.json, merged with defaults.
+ * Returns the merged config.
+ * @param {string} worktreePath
+ * @returns {{ basePort: number, increment: number, envVars: string[] }}
+ */
+function readGitWtConfig(worktreePath) {
+  const commonDir = resolveGitCommonDir(worktreePath);
+  if (!commonDir) return { ...GIT_WT_DEFAULTS };
+  // .git-wt.json lives in the project root (parent of common dir)
+  const projectRoot = path.dirname(commonDir);
+  const configPath = path.join(projectRoot, '.git-wt.json');
+  let raw;
+  try {
+    raw = fs.readFileSync(configPath, 'utf8');
+  } catch {
+    return { ...GIT_WT_DEFAULTS };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ...GIT_WT_DEFAULTS };
+  }
+  return {
+    basePort: parsed.basePort ?? GIT_WT_DEFAULTS.basePort,
+    increment: parsed.increment ?? GIT_WT_DEFAULTS.increment,
+    envVars: Array.isArray(parsed.envVars) ? parsed.envVars : GIT_WT_DEFAULTS.envVars,
+  };
+}
+
+/**
+ * Read the git-wt offset for a branch from the git common dir's git-wt-ports.json.
+ * Returns { offset } where offset may be 0 (valid), or null when:
+ * - common dir cannot be resolved
+ * - file is absent
+ * - JSON is malformed
+ * - branch is not in allocations
+ * @param {string} worktreePath
  * @param {string} branch
  * @returns {{ offset: number } | null}
  */
-export function readGitWtOffset(projectRoot, branch) {
-  const filePath = path.join(projectRoot, '.git', 'git-wt-ports.json');
+export function readGitWtOffset(worktreePath, branch) {
+  const commonDir = resolveGitCommonDir(worktreePath);
+  if (!commonDir) return null;
+  const filePath = path.join(commonDir, 'git-wt-ports.json');
   let raw;
   try {
     raw = fs.readFileSync(filePath, 'utf8');
@@ -80,8 +164,11 @@ export function readGitWtOffset(projectRoot, branch) {
     console.warn(`[local-pm] git-wt-ports.json at ${filePath} is malformed JSON — ignoring`);
     return null;
   }
-  if (parsed[branch] == null) return null;
-  return { offset: parsed[branch] };
+  const alloc = parsed?.allocations?.[branch];
+  if (alloc == null) return null;
+  // offset 0 is valid (e.g. main/develop branch)
+  if (typeof alloc.offset !== 'number') return null;
+  return { offset: alloc.offset };
 }
 
 /**
@@ -175,9 +262,21 @@ function slugify(str) {
 }
 
 /**
+ * Returns true if any compose file exists in dirPath.
+ * @param {string} dirPath
+ * @returns {boolean}
+ */
+function hasComposeFile(dirPath) {
+  return ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml'].some(
+    (name) => fs.existsSync(path.join(dirPath, name)),
+  );
+}
+
+/**
  * Build the environment variables to inject when starting a server for a worktree.
  * Dispatches on worktree.type:
- *   - 'git-wt': uses git-wt-ports.json offset + compose port vars; falls back to assignPort
+ *   - 'git-wt': reads git-wt-ports.json offset, uses git-wt envVars config (PORT, WS_PORT)
+ *               with formula basePort + offset * increment; falls back to assignPort
  *   - 'docker': assigns pool ports per compose var; sets COMPOSE_PROJECT_NAME
  *   - everything else (plain): assigns a single PORT from the pool
  * @param {{ project: string, branch: string, path: string, type?: string }} worktree
@@ -190,14 +289,16 @@ export function buildEnvForTarget(worktree) {
     const offsetResult = readGitWtOffset(wtPath, branch);
     if (offsetResult !== null) {
       const { offset } = offsetResult;
-      const vars = scanComposePortVars(wtPath);
+      const config = readGitWtConfig(wtPath);
+      const port = config.basePort + offset * config.increment;
       const env = {};
-      for (const { varName, base } of vars) {
-        if (base != null) {
-          env[varName] = String(offset + base);
-        }
+      for (const varName of config.envVars) {
+        env[varName] = String(port);
       }
-      env.COMPOSE_PROJECT_NAME = slugify(`${project}-${branch}`);
+      // Only set COMPOSE_PROJECT_NAME when compose files are present.
+      if (hasComposeFile(wtPath)) {
+        env.COMPOSE_PROJECT_NAME = slugify(`${project}-${branch}`);
+      }
       return env;
     }
     // Fall through to plain assignPort if offset not found.
