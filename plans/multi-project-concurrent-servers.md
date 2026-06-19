@@ -300,8 +300,8 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 
 **Steps:**
 
-- [ ] Update README.md with multi-server model description, new routes table, hybrid port model explanation, and "Adding a project" workflow
-- [ ] Update ROADMAP.md: tick Stage C complete; add PRD 2 entry with description of interactive terminals scope
+- [x] Update README.md with multi-server model description, new routes table, hybrid port model explanation, and "Adding a project" workflow
+- [x] Update ROADMAP.md: tick Stage C complete; add PRD 2 entry with description of interactive terminals scope
 - [ ] User reviews both documents and approves
 
 **Tests:**
@@ -310,10 +310,10 @@ No automated tests — justified because: pure documentation change with no exec
 
 **Verification:**
 
-- [ ] README accurately reflects all routes introduced in P1–P4
-- [ ] README hybrid port section matches actual behavior of `ports.js`
-- [ ] ROADMAP Stage C marked complete
-- [ ] ROADMAP PRD 2 entry present with interactive-terminals description
+- [x] README accurately reflects all routes introduced in P1–P4
+- [x] README hybrid port section matches actual behavior of `ports.js`
+- [x] ROADMAP Stage C marked complete
+- [x] ROADMAP PRD 2 entry present with interactive-terminals description
 - [ ] User has read and approved both documents
 
 **Phase review:**
@@ -321,12 +321,12 @@ No automated tests — justified because: pure documentation change with no exec
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing (or no-tests justification accepted)
-- [ ] Documentation updated (see Documentation section)
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
+- [x] Tests for this phase written and passing (or no-tests justification accepted)
+- [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `docs: update README and ROADMAP for multi-server model`
+- [x] Changes committed: `docs: update README and ROADMAP for multi-server model`
 - [ ] Phase marked complete
 
 ---
