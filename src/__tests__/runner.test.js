@@ -40,13 +40,14 @@ function makeChild(pid, autoClose = false) {
 function makeSpawnStub(refs = {}) {
   let callCount = 0;
   refs.opts = [];
-  return function stub(_cmd, _args, opts) {
+  return function stub(cmd, _args, opts) {
     callCount += 1;
     refs.opts.push(opts);
     if (callCount === 1) {
       refs.install = makeChild(callCount * 1000, /* autoClose */ true);
       return refs.install;
     }
+    refs.devCmdArg = cmd;
     refs.dev = makeChild(callCount * 1000, /* autoClose */ false);
     refs.callCount = callCount;
     return refs.dev;
@@ -143,6 +144,38 @@ describe('spawn env merge', () => {
     // A representative process.env key must survive the merge (PATH on win, Path fallback).
     const procKey = process.env.PATH !== undefined ? 'PATH' : Object.keys(process.env)[0];
     assert.equal(devOpts.env[procKey], process.env[procKey], 'process.env preserved in merge');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// spawnDevServer honors the stored devCmd
+// ---------------------------------------------------------------------------
+
+describe('stored devCmd at spawn', () => {
+  // On win32 the runner rewrites a leading `npm ` to `npm.cmd `; normalize both.
+  const cmdOf = (raw) => (process.platform === 'win32' ? raw.replace(/^npm /, 'npm.cmd ') : raw);
+
+  it('spawns the project devCmd instead of the hardcoded npm run dev', async () => {
+    const refs = {};
+    runner._setSpawnFn(makeSpawnStub(refs));
+
+    const wtPath = 'C:\\fake\\devCmdWt';
+    await runner.startServer(wtPath, {
+      project: 'p', branch: 'feat', path: wtPath, type: 'plain', devCmd: 'npm run start',
+    });
+
+    // Second spawn is the dev server: first positional arg is the command string.
+    assert.equal(refs.devCmdArg, cmdOf('npm run start'));
+  });
+
+  it('falls back to npm run dev when no devCmd is stored', async () => {
+    const refs = {};
+    runner._setSpawnFn(makeSpawnStub(refs));
+
+    const wtPath = 'C:\\fake\\noDevCmdWt';
+    await runner.startServer(wtPath, { project: 'p', branch: 'feat', path: wtPath, type: 'plain' });
+
+    assert.equal(refs.devCmdArg, cmdOf('npm run dev'));
   });
 });
 

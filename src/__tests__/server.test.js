@@ -270,6 +270,12 @@ describe('project CRUD routes', () => {
       assert.ok(body.detection, 'detection present');
       assert.ok('devCmd' in body.detection, 'devCmd surfaced for UI display');
       assert.ok(typeof body.detection.type === 'string');
+      // The detected devCmd must be persisted on the project entry so Start
+      // later spawns it (this repo has a "start" script → npm run start).
+      assert.equal(body.project.devCmd, body.detection.devCmd, 'add persists detected devCmd');
+      const stored = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+      const saved = stored.find((p) => p.root === repoRoot);
+      assert.equal(saved.devCmd, body.detection.devCmd, 'devCmd written to projects.json');
     });
   });
 

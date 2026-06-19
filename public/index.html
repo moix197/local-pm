@@ -325,6 +325,23 @@
         return { ok: res.ok, status: res.status, body: parsed };
       }
 
+      // Wrap apiSend for mutating verbs: surface a non-ok response to the user
+      // instead of failing silently. Returns true on success, false otherwise.
+      async function apiSendChecked(method, url, body, action) {
+        try {
+          const { ok, body: resBody } = await apiSend(method, url, body);
+          if (!ok) {
+            alert(`Could not ${action}: ${resBody.error ?? 'server error'}`);
+            return false;
+          }
+          return true;
+        } catch (err) {
+          if (err instanceof AuthError) { renderAuthError(); return false; }
+          alert(`Could not ${action}: could not reach server.`);
+          return false;
+        }
+      }
+
       async function refreshAfterMutation() {
         try {
           await fetchProjects();
@@ -591,15 +608,22 @@
       function renderProjects(state, busy) {
         const container = document.getElementById('projects');
         const focused = captureFocusedFreeForm(container);
+        // Preserve in-progress edits across the rebuild below.
+        const editSeed = openEditRoot ? captureEditValues(container) : null;
         const running = runningPaths(state);
         container.innerHTML = '';
         for (const [project, worktrees] of groupByProject(state.worktrees)) {
+          const configured = projectsByName.get(project);
           const section = document.createElement('div');
           section.className = 'project';
-          section.appendChild(makeProjectHeader(projectsByName.get(project), project));
+          section.appendChild(makeProjectHeader(configured, project));
           for (const w of worktrees) section.appendChild(makeRow(w, running, busy));
+          // Re-render an open Edit form so a poll-driven rebuild does not wipe it.
+          if (configured && openEditRoot === configured.root) renderEditForm(section, configured, editSeed);
           container.appendChild(section);
         }
+        // Drop tracker if its project no longer renders (e.g. removed elsewhere).
+        if (openEditRoot && !container.querySelector('.setup-form')) openEditRoot = null;
         restoreFocusedFreeForm(container, focused);
       }
 
@@ -694,7 +718,8 @@
                 : 'No dev/start script was detected — enter the command to run, then Save.',
               values: { name: project.name, devCmd: detection.devCmd, portVars: detection.portVars },
               onSubmit: async (patch) => {
-                await apiSend('PATCH', '/api/projects', { root: project.root, patch });
+                const ok = await apiSendChecked('PATCH', '/api/projects', { root: project.root, patch }, 'save project');
+                if (!ok) return;
                 clearSetup();
                 refreshAfterMutation();
               },
@@ -709,19 +734,51 @@
         }
       }
 
-      function openEditForm(container, project) {
-        const existing = container.querySelector('.setup-form');
-        if (existing) { existing.remove(); return; }
+      // Root of the project whose inline Edit form is currently open, or null.
+      // Tracked at module scope so the 2s poll can re-render the form (it lives
+      // inside a `.project` section that renderProjects rebuilds on every poll).
+      let openEditRoot = null;
+
+      function closeEditForm(container) {
+        const f = container?.querySelector('.setup-form');
+        if (f) f.remove();
+        openEditRoot = null;
+      }
+
+      // Read the live edit form's current field values so a poll-driven re-render
+      // reseeds with what the user has typed rather than the stored project values.
+      function captureEditValues(container) {
+        const form = container?.querySelector('.setup-form');
+        if (!form) return null;
+        const inputs = form.querySelectorAll('input[type="text"]');
+        const [name, devCmd, ports] = inputs;
+        return {
+          name: name?.value,
+          devCmd: devCmd?.value,
+          portVars: (ports?.value ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+        };
+      }
+
+      function renderEditForm(container, project, seed) {
+        const values = seed ?? { name: project.name, devCmd: project.devCmd, portVars: project.portVars };
         const form = buildSetupForm({
           title: `Edit ${project.name}`,
-          values: { name: project.name, devCmd: project.devCmd, portVars: project.portVars },
+          values,
           onSubmit: async (patch) => {
-            await apiSend('PATCH', '/api/projects', { root: project.root, patch });
+            const ok = await apiSendChecked('PATCH', '/api/projects', { root: project.root, patch }, 'save project');
+            if (!ok) return;
+            openEditRoot = null;
             refreshAfterMutation();
           },
-          onCancel: () => { const f = container.querySelector('.setup-form'); if (f) f.remove(); },
+          onCancel: () => closeEditForm(container),
         });
         container.appendChild(form);
+      }
+
+      function openEditForm(container, project) {
+        if (openEditRoot === project.root) { closeEditForm(container); return; }
+        openEditRoot = project.root;
+        renderEditForm(container, project);
       }
 
       function makeProjectHeader(project, projectName) {
@@ -748,8 +805,8 @@
         edit.onclick = () => openEditForm(wrap.parentElement, project);
         remove.onclick = async () => {
           if (!confirm('Remove project ' + project.name + '?')) return;
-          await apiSend('DELETE', '/api/projects', { root: project.root });
-          refreshAfterMutation();
+          const ok = await apiSendChecked('DELETE', '/api/projects', { root: project.root }, 'remove project');
+          if (ok) refreshAfterMutation();
         };
         return wrap;
       }

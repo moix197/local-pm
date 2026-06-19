@@ -77,7 +77,16 @@ async function handleStart(req, res) {
   if (!known || !fs.existsSync(worktreePath)) {
     return sendJson(res, 400, { error: `unknown or missing worktree path: ${worktreePath}` });
   }
-  const meta = { project: known.project, branch: known.branch, path: worktreePath, type: known.type };
+  // Thread the project's STORED devCmd (from detect.js scan or the setup form)
+  // so spawnDevServer runs it instead of a hardcoded command.
+  const project = loadProjects().find((p) => p.name === known.project);
+  const meta = {
+    project: known.project,
+    branch: known.branch,
+    path: worktreePath,
+    type: known.type,
+    devCmd: project?.devCmd ?? null,
+  };
   try {
     await startServer(worktreePath, meta);
   } catch (err) {
@@ -132,7 +141,9 @@ async function handleProjectAdd(req, res) {
     return sendJson(res, 400, { error: `not a valid directory: ${err.message}` });
   }
   const name = path.basename(folderPath);
-  const entry = addProject({ name, root: folderPath, type: detection.type });
+  // Persist the detected devCmd so Start spawns it; null when no script detected
+  // (the setup form then fills it via PATCH). Never sourced from raw user input.
+  const entry = addProject({ name, root: folderPath, type: detection.type, devCmd: detection.devCmd });
   sendJson(res, 200, { project: entry, detection });
 }
 

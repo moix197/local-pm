@@ -120,9 +120,16 @@ function runNpmInstall(worktreePath, env) {
   });
 }
 
-// devCmd originates from package.json scripts ("dev"), never raw user input.
+// devCmd originates from detect.js's package.json scan or the setup form, never
+// raw user input. Falls back to `npm run dev` when no command was stored.
 function spawnDevServer(worktreePath, meta, env) {
-  const child = _spawn('npm.cmd', ['run', 'dev'], {
+  const devCmd = meta?.devCmd || 'npm run dev';
+  // shell:true lets the stored command string run through the shell, matching the
+  // existing npm.cmd invocation (npm.cmd on Windows preserves cross-platform behavior).
+  const cmd = process.platform === 'win32' ? devCmd.replace(/^npm /, 'npm.cmd ') : devCmd;
+  // Pass the full command as a single string with empty args + shell:true, mirroring
+  // the (_cmd, _args, opts) shape of the npm.cmd install spawn so the shell parses it.
+  const child = _spawn(cmd, [], {
     cwd: worktreePath,
     shell: true,
     env: { ...process.env, ...env },
