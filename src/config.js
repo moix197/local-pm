@@ -23,6 +23,18 @@ function readProjectsFile() {
 }
 
 /**
+ * Atomically persist the projects array: write to `projects.json.tmp` then
+ * `fs.renameSync` over `projects.json`. A crash between write and rename leaves
+ * the `.tmp` file (recoverable) — `projects.json` is never half-written.
+ * @param {Array<object>} projects
+ */
+function writeProjectsFile(projects) {
+  const tmpFile = projectsFile + '.tmp';
+  fs.writeFileSync(tmpFile, JSON.stringify(projects, null, 2) + '\n', 'utf8');
+  fs.renameSync(tmpFile, projectsFile);
+}
+
+/**
  * Normalize an optional per-project `commands` value into `{label,cmd}` objects.
  * Accepts strings (→ `{label:s, cmd:s}`) or `{label,cmd}` objects; absent ⇒ `[]`.
  * @param {unknown} raw
@@ -61,4 +73,48 @@ function withRootExists(project) {
 export function loadProjects() {
   ensureProjectsFile();
   return readProjectsFile().map(withRootExists);
+}
+
+/**
+ * Append a project entry to projects.json (atomic write). Replaces any existing
+ * entry with the same `root` so re-adding a folder updates it in place.
+ * @param {{ name: string, root: string, [k:string]: unknown }} entry
+ * @returns {object} the stored entry
+ */
+export function addProject(entry) {
+  ensureProjectsFile();
+  const projects = readProjectsFile().filter((p) => p.root !== entry.root);
+  projects.push(entry);
+  writeProjectsFile(projects);
+  return entry;
+}
+
+/**
+ * Remove the project whose `root` matches (atomic write).
+ * @param {string} root
+ * @returns {boolean} true if an entry was removed
+ */
+export function removeProject(root) {
+  ensureProjectsFile();
+  const projects = readProjectsFile();
+  const next = projects.filter((p) => p.root !== root);
+  if (next.length === projects.length) return false;
+  writeProjectsFile(next);
+  return true;
+}
+
+/**
+ * Shallow-merge `patch` onto the project whose `root` matches (atomic write).
+ * @param {string} root
+ * @param {object} patch
+ * @returns {object|null} the updated entry, or null if no match
+ */
+export function updateProject(root, patch) {
+  ensureProjectsFile();
+  const projects = readProjectsFile();
+  const idx = projects.findIndex((p) => p.root === root);
+  if (idx === -1) return null;
+  projects[idx] = { ...projects[idx], ...patch, root: projects[idx].root };
+  writeProjectsFile(projects);
+  return projects[idx];
 }

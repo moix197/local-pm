@@ -239,6 +239,87 @@ describe('POST /api/start concurrent', () => {
   });
 });
 
+describe('project CRUD routes', () => {
+  // These routes mutate projects.json; snapshot/restore around each so the
+  // shared file (also used by /api/state worktree lookups) stays consistent.
+  function withProjectsSnapshot(fn) {
+    const backup = fs.readFileSync(projectsFile, 'utf8');
+    return Promise.resolve(fn()).finally(() => fs.writeFileSync(projectsFile, backup, 'utf8'));
+  }
+
+  it('GET /api/projects returns the configured list', async () => {
+    await withProjectsSnapshot(async () => {
+      const res = await fetch(`${baseUrl}/api/projects`, { headers: auth() });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(Array.isArray(body.projects));
+      assert.ok(body.projects.some((p) => p.root === repoRoot));
+    });
+  });
+
+  it('POST /api/projects/add detects + persists, returns devCmd in detection', async () => {
+    await withProjectsSnapshot(async () => {
+      const res = await fetch(`${baseUrl}/api/projects/add`, {
+        method: 'POST',
+        headers: auth({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ path: repoRoot }),
+      });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.equal(body.project.root, repoRoot);
+      assert.ok(body.detection, 'detection present');
+      assert.ok('devCmd' in body.detection, 'devCmd surfaced for UI display');
+      assert.ok(typeof body.detection.type === 'string');
+    });
+  });
+
+  it('POST /api/projects/add returns 400 for an invalid directory', async () => {
+    const res = await fetch(`${baseUrl}/api/projects/add`, {
+      method: 'POST',
+      headers: auth({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ path: 'C:/nope/nowhere/at/all' }),
+    });
+    assert.equal(res.status, 400);
+  });
+
+  it('DELETE /api/projects removes the entry', async () => {
+    await withProjectsSnapshot(async () => {
+      fs.writeFileSync(
+        projectsFile,
+        JSON.stringify([{ name: 'self', root: repoRoot }, { name: 'gone', root: 'C:/p/gone' }]) + '\n',
+        'utf8',
+      );
+      const res = await fetch(`${baseUrl}/api/projects`, {
+        method: 'DELETE',
+        headers: auth({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ root: 'C:/p/gone' }),
+      });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(!body.projects.some((p) => p.root === 'C:/p/gone'));
+    });
+  });
+
+  it('PATCH /api/projects updates the entry', async () => {
+    await withProjectsSnapshot(async () => {
+      fs.writeFileSync(
+        projectsFile,
+        JSON.stringify([{ name: 'self', root: repoRoot }, { name: 'edit-me', root: 'C:/p/edit' }]) + '\n',
+        'utf8',
+      );
+      const res = await fetch(`${baseUrl}/api/projects`, {
+        method: 'PATCH',
+        headers: auth({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ root: 'C:/p/edit', patch: { name: 'edited', devCmd: 'npm run dev' } }),
+      });
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.equal(body.project.name, 'edited');
+      assert.equal(body.project.devCmd, 'npm run dev');
+    });
+  });
+});
+
 describe('POST /api/start pool exhaustion', () => {
   it('returns 503 with a descriptive message when the port pool is exhausted', async () => {
     const POOL_START = 3100;

@@ -299,11 +299,49 @@ binds to `0.0.0.0`. The active dev server link points at `http://<desktop-ip>:30
 
 ## Add projects
 
-Edit `projects.json` at the repo root:
+### From the UI (recommended)
+
+The **Add project** panel at the top of the dashboard takes a folder path. On
+**Add**, the server:
+
+1. **Validates the path** is a real existing directory (`fs.stat`). A bad path
+   returns `400` and the panel shows the error — nothing is saved.
+2. **Auto-detects the type:**
+   - `.git-wt.json` or `.git/git-wt-ports.json` present → `git-wt`
+   - a `docker-compose*.yml` / `compose.yaml` present → `docker` (its `${VAR}`
+     port placeholders are scanned via `scanComposePortVars`)
+   - otherwise → `plain`
+3. **Sources the dev command** from the project's **own `package.json`** —
+   `scripts.dev` (→ `npm run dev`), else `scripts.start` (→ `npm run start`).
+   The dev command is **never** taken from a typed string; it always comes from
+   the project's `package.json`.
+4. **Persists** the entry to `projects.json` (atomic write: `projects.json.tmp`
+   then rename, so a crash never leaves a half-written file).
+
+The detected dev command is returned to the UI and shown on each stopped
+worktree row (`starts: <cmd>`) so you can see exactly what **Start** will spawn.
+
+#### Setup form fallback
+
+If detection is inconclusive — no `dev`/`start` script, or a compose port var
+whose base port could not be resolved — `needsSetup` is `true` and an inline
+**setup form** appears, pre-filled with whatever was detected. Fill in the dev
+command and any port variables, then **Save** (`PATCH /api/projects`). The
+project then appears in the worktree list with a **Start** button.
+
+#### Edit / remove
+
+Each project header has a pencil (**Edit** — opens the same form pre-populated to
+rename or change the dev command) and an **×** (**Remove**). Both persist via
+`PATCH` / `DELETE /api/projects` and survive a page reload.
+
+### By hand
+
+You can still edit `projects.json` at the repo root directly:
 
 ```json
 [
-  { "name": "my-project", "root": "C:/path/to/your/project" }
+  { "name": "my-project", "root": "C:/path/to/your/project", "type": "plain" }
 ]
 ```
 
@@ -311,6 +349,15 @@ If `projects.json` is missing it's created with a generic placeholder on first r
 Projects whose `root` doesn't exist are flagged and skipped. If `projects.json`
 contains invalid JSON, startup fails with a descriptive error
 (`projects.json is not valid JSON: …`) rather than starting silently broken.
+
+### Project API routes
+
+| Method | Route | Body | Returns |
+|---|---|---|---|
+| GET | `/api/projects` | — | `{ projects }` (configured list) |
+| POST | `/api/projects/add` | `{ path }` | `{ project, detection }` (detection includes `devCmd`); `400` if not a directory |
+| PATCH | `/api/projects` | `{ root, patch }` | `{ project }` (updated); `404` if no match |
+| DELETE | `/api/projects` | `{ root }` | `{ projects }` (remaining); `404` if no match |
 
 ## Limitations & assumptions
 

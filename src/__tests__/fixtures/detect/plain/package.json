@@ -1,0 +1,6 @@
+{
+  "name": "plain-fixture",
+  "scripts": {
+    "dev": "node index.js"
+  }
+}

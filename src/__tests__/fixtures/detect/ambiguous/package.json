@@ -1,0 +1,6 @@
+{
+  "name": "ambiguous-fixture",
+  "scripts": {
+    "build": "tsc"
+  }
+}

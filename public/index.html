@@ -96,6 +96,52 @@
       }
       .cmd-form input[type="text"]:focus { outline: none; border-color: var(--accent); }
       .cmd-form input[type="text"]:disabled { opacity: 0.5; }
+      .add-project {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin-bottom: 20px;
+      }
+      .add-project h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+      .add-row { display: flex; gap: 8px; }
+      .add-row input[type="text"] {
+        flex: 1;
+        font: inherit;
+        padding: 5px 10px;
+        background: #010409;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+      }
+      .add-row input[type="text"]:focus { outline: none; border-color: var(--accent); }
+      .add-error { color: var(--red); font-size: 13px; margin-top: 8px; min-height: 0; }
+      .add-error:empty { display: none; }
+      .setup-form {
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px dashed var(--border);
+        border-radius: 6px;
+      }
+      .setup-form h3 { margin: 0 0 4px; font-size: 13px; }
+      .setup-form p { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+      .setup-form label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+      .setup-form input[type="text"] {
+        width: 100%;
+        font: inherit;
+        padding: 5px 10px;
+        background: #010409;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+      }
+      .setup-form input[type="text"]:focus { outline: none; border-color: var(--accent); }
+      .setup-form .actions { margin-top: 12px; display: flex; gap: 8px; }
+      .devcmd { color: var(--muted); font-size: 12px; white-space: nowrap; }
+      .devcmd code { color: var(--text); }
+      .row-icons { display: flex; gap: 4px; }
+      button.icon { padding: 5px 9px; }
+      button.icon.remove { border-color: var(--red); color: var(--red); }
       .logs {
         margin-top: 24px;
       }
@@ -178,6 +224,15 @@
     </header>
     <main>
       <div id="running" class="running-section"></div>
+      <div id="addProject" class="add-project">
+        <h2>Add project</h2>
+        <div class="add-row">
+          <input id="addPath" type="text" placeholder="C:/path/to/project folder" autocomplete="off" />
+          <button id="addBtn" class="start">Add</button>
+        </div>
+        <div id="addError" class="add-error"></div>
+        <div id="addSetup"></div>
+      </div>
       <div id="projects"></div>
     </main>
     <script type="module">
@@ -220,6 +275,23 @@
         return res.json();
       }
 
+      // Configured projects (root/type/devCmd) — the source of Edit/Remove and
+      // the devCmd shown on each worktree row. Refreshed on each poll alongside state.
+      let projectsByName = new Map();
+      let projectsByRoot = new Map();
+
+      async function fetchProjects() {
+        const res = await fetch('/api/projects', { headers: authHeaders() });
+        if (res.status === 401) throw new AuthError('unauthorized');
+        const body = await res.json();
+        projectsByName = new Map();
+        projectsByRoot = new Map();
+        for (const p of body.projects ?? []) {
+          projectsByName.set(p.name, p);
+          projectsByRoot.set(p.root, p);
+        }
+      }
+
       async function post(url, body) {
         inFlight = true;
         render(lastState, true);
@@ -237,6 +309,30 @@
         } finally {
           inFlight = false;
           render(lastState);
+        }
+      }
+
+      // Generic JSON request for non-POST project verbs (DELETE/PATCH). Unlike
+      // `post`, it returns the parsed body so callers can read the detection result.
+      async function apiSend(method, url, body) {
+        const res = await fetch(url, {
+          method,
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        if (res.status === 401) throw new AuthError('unauthorized');
+        const parsed = await res.json().catch(() => ({}));
+        return { ok: res.ok, status: res.status, body: parsed };
+      }
+
+      async function refreshAfterMutation() {
+        try {
+          await fetchProjects();
+          lastState = await fetchState();
+          render(lastState);
+        } catch (err) {
+          if (err instanceof AuthError) return renderAuthError();
+          throw err;
         }
       }
 
@@ -273,6 +369,7 @@
           }
           setStoredToken(candidate);
           lastState = await res.json();
+          try { await fetchProjects(); } catch { /* projects load is non-fatal at login */ }
           hideLoginOverlay();
           render(lastState);
           startPolling();
@@ -452,6 +549,13 @@
           row.insertAdjacentHTML('beforeend', '<span class="running">● running</span>');
           return row;
         }
+        // Show the command that Start will spawn so it is visible before any spawn.
+        const project = projectsByName.get(w.project);
+        const devCmd = project?.devCmd ?? 'npm run dev';
+        const devSpan = document.createElement('span');
+        devSpan.className = 'devcmd';
+        devSpan.innerHTML = `starts: <code>${devCmd}</code>`;
+        row.appendChild(devSpan);
         for (const c of w.commands ?? []) row.appendChild(makeCommandButton(w, c, busy));
         row.appendChild(makeFreeFormInput(w, busy));
         const btn = document.createElement('button');
@@ -492,13 +596,162 @@
         for (const [project, worktrees] of groupByProject(state.worktrees)) {
           const section = document.createElement('div');
           section.className = 'project';
-          const h2 = document.createElement('h2');
-          h2.textContent = project;
-          section.appendChild(h2);
+          section.appendChild(makeProjectHeader(projectsByName.get(project), project));
           for (const w of worktrees) section.appendChild(makeRow(w, running, busy));
           container.appendChild(section);
         }
         restoreFocusedFreeForm(container, focused);
+      }
+
+      // --- Add / edit project --------------------------------------------------
+
+      function setAddError(msg) {
+        document.getElementById('addError').textContent = msg ?? '';
+      }
+
+      function clearSetup() {
+        document.getElementById('addSetup').innerHTML = '';
+      }
+
+      // Build an inline setup/edit form. `values` pre-fills the fields; `onSubmit`
+      // receives the collected patch. Used both for the post-add setup fallback and
+      // the per-project Edit button — same form, different seed values.
+      function buildSetupForm({ title, hint, values, onSubmit, onCancel }) {
+        const form = document.createElement('div');
+        form.className = 'setup-form';
+        const h3 = document.createElement('h3');
+        h3.textContent = title;
+        form.appendChild(h3);
+        if (hint) {
+          const p = document.createElement('p');
+          p.textContent = hint;
+          form.appendChild(p);
+        }
+
+        const nameLabel = document.createElement('label');
+        nameLabel.textContent = 'Name';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = values.name ?? '';
+
+        const devLabel = document.createElement('label');
+        devLabel.textContent = 'Dev command';
+        const devInput = document.createElement('input');
+        devInput.type = 'text';
+        devInput.placeholder = 'npm run dev';
+        devInput.value = values.devCmd ?? '';
+
+        const portsLabel = document.createElement('label');
+        portsLabel.textContent = 'Port variables (comma-separated, e.g. APP_PORT,WS_HOST_PORT)';
+        const portsInput = document.createElement('input');
+        portsInput.type = 'text';
+        portsInput.value = (values.portVars ?? []).map((v) => v.varName ?? v).join(', ');
+
+        form.append(nameLabel, nameInput, devLabel, devInput, portsLabel, portsInput);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        const save = document.createElement('button');
+        save.className = 'start';
+        save.textContent = 'Save';
+        save.onclick = () => {
+          const portVars = portsInput.value
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map((varName) => ({ varName }));
+          onSubmit({ name: nameInput.value.trim(), devCmd: devInput.value.trim(), portVars });
+        };
+        const cancel = document.createElement('button');
+        cancel.textContent = 'Cancel';
+        cancel.onclick = onCancel;
+        actions.append(save, cancel);
+        form.appendChild(actions);
+        return form;
+      }
+
+      async function submitAddProject() {
+        const input = document.getElementById('addPath');
+        const folderPath = input.value.trim();
+        if (!folderPath) return;
+        setAddError('');
+        clearSetup();
+        try {
+          const { ok, body } = await apiSend('POST', '/api/projects/add', { path: folderPath });
+          if (!ok) {
+            setAddError(body.error ?? 'Could not add project.');
+            return;
+          }
+          input.value = '';
+          const { project, detection } = body;
+          // The chosen dev command MUST be visible before any Start — show the
+          // setup form (pre-filled) whenever detection is inconclusive.
+          if (detection.needsSetup) {
+            const setup = buildSetupForm({
+              title: `Set up ${project.name}`,
+              hint: detection.devCmd
+                ? 'Confirm the detected dev command and any port variables, then Save.'
+                : 'No dev/start script was detected — enter the command to run, then Save.',
+              values: { name: project.name, devCmd: detection.devCmd, portVars: detection.portVars },
+              onSubmit: async (patch) => {
+                await apiSend('PATCH', '/api/projects', { root: project.root, patch });
+                clearSetup();
+                refreshAfterMutation();
+              },
+              onCancel: () => { clearSetup(); refreshAfterMutation(); },
+            });
+            document.getElementById('addSetup').appendChild(setup);
+          }
+          refreshAfterMutation();
+        } catch (err) {
+          if (err instanceof AuthError) return renderAuthError();
+          setAddError('Could not reach server.');
+        }
+      }
+
+      function openEditForm(container, project) {
+        const existing = container.querySelector('.setup-form');
+        if (existing) { existing.remove(); return; }
+        const form = buildSetupForm({
+          title: `Edit ${project.name}`,
+          values: { name: project.name, devCmd: project.devCmd, portVars: project.portVars },
+          onSubmit: async (patch) => {
+            await apiSend('PATCH', '/api/projects', { root: project.root, patch });
+            refreshAfterMutation();
+          },
+          onCancel: () => { const f = container.querySelector('.setup-form'); if (f) f.remove(); },
+        });
+        container.appendChild(form);
+      }
+
+      function makeProjectHeader(project, projectName) {
+        const h2 = document.createElement('h2');
+        h2.textContent = projectName;
+        if (!project) return h2;
+        const icons = document.createElement('span');
+        icons.className = 'row-icons';
+        icons.style.marginLeft = 'auto';
+        const edit = document.createElement('button');
+        edit.className = 'icon';
+        edit.title = 'Edit project';
+        edit.textContent = '✎';
+        const remove = document.createElement('button');
+        remove.className = 'icon remove';
+        remove.title = 'Remove project';
+        remove.textContent = '×';
+        icons.append(edit, remove);
+        const wrap = document.createElement('div');
+        wrap.style.display = 'flex';
+        wrap.style.alignItems = 'center';
+        wrap.appendChild(h2);
+        wrap.appendChild(icons);
+        edit.onclick = () => openEditForm(wrap.parentElement, project);
+        remove.onclick = async () => {
+          if (!confirm('Remove project ' + project.name + '?')) return;
+          await apiSend('DELETE', '/api/projects', { root: project.root });
+          refreshAfterMutation();
+        };
+        return wrap;
       }
 
       function render(state, busy = inFlight) {
@@ -517,7 +770,8 @@
       async function tick() {
         if (!inFlight) {
           try {
-            lastState = await fetchState();
+            const [state] = await Promise.all([fetchState(), fetchProjects()]);
+            lastState = state;
             render(lastState);
           } catch (err) {
             if (err instanceof AuthError) return renderAuthError();
@@ -532,6 +786,10 @@
         pollingInterval = setInterval(tick, 2000);
       }
 
+      document.getElementById('addBtn').addEventListener('click', submitAddProject);
+      document.getElementById('addPath').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitAddProject();
+      });
       document.getElementById('tokenSubmit').addEventListener('click', submitToken);
       document.getElementById('tokenInput').addEventListener('keydown', e => {
         if (e.key === 'Enter') submitToken();

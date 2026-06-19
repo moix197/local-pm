@@ -15,6 +15,8 @@ import {
 } from './runner.js';
 import { getLanIPv4 } from './netinfo.js';
 import { ensureToken, isAuthorized } from './token.js';
+import { loadProjects, addProject, removeProject, updateProject } from './config.js';
+import { autoDetectProject } from './detect.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const indexHtml = path.join(repoRoot, 'public', 'index.html');
@@ -114,6 +116,46 @@ function handleStopCommand(res) {
   sendJson(res, 200, getStatus());
 }
 
+// --- project CRUD ----------------------------------------------------------
+
+function projectsList() {
+  return loadProjects().map(({ exists, ...entry }) => entry);
+}
+
+async function handleProjectAdd(req, res) {
+  const { path: folderPath } = await readJsonBody(req);
+  if (!folderPath) return sendJson(res, 400, { error: 'path is required' });
+  let detection;
+  try {
+    detection = autoDetectProject(folderPath);
+  } catch (err) {
+    return sendJson(res, 400, { error: `not a valid directory: ${err.message}` });
+  }
+  const name = path.basename(folderPath);
+  const entry = addProject({ name, root: folderPath, type: detection.type });
+  sendJson(res, 200, { project: entry, detection });
+}
+
+async function handleProjectDelete(req, res) {
+  const { root } = await readJsonBody(req);
+  if (!root) return sendJson(res, 400, { error: 'root is required' });
+  const removed = removeProject(root);
+  if (!removed) return sendJson(res, 404, { error: `no project with root: ${root}` });
+  sendJson(res, 200, { projects: projectsList() });
+}
+
+async function handleProjectPatch(req, res) {
+  const { root, patch } = await readJsonBody(req);
+  if (!root || !patch) return sendJson(res, 400, { error: 'root and patch are required' });
+  const updated = updateProject(root, patch);
+  if (!updated) return sendJson(res, 404, { error: `no project with root: ${root}` });
+  sendJson(res, 200, { project: updated });
+}
+
+function handleProjectsGet(res) {
+  sendJson(res, 200, { projects: projectsList() });
+}
+
 async function route(req, res) {
   const { method } = req;
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -127,6 +169,10 @@ async function route(req, res) {
   if (method === 'POST' && url.pathname === '/api/stop') return handleStop(req, res);
   if (method === 'POST' && url.pathname === '/api/command') return handleCommand(req, res);
   if (method === 'POST' && url.pathname === '/api/command/stop') return handleStopCommand(res);
+  if (method === 'GET' && url.pathname === '/api/projects') return handleProjectsGet(res);
+  if (method === 'POST' && url.pathname === '/api/projects/add') return handleProjectAdd(req, res);
+  if (method === 'DELETE' && url.pathname === '/api/projects') return handleProjectDelete(req, res);
+  if (method === 'PATCH' && url.pathname === '/api/projects') return handleProjectPatch(req, res);
   sendJson(res, 404, { error: 'not found' });
 }
 

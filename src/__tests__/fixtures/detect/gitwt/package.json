@@ -1,0 +1,6 @@
+{
+  "name": "gitwt-fixture",
+  "scripts": {
+    "dev": "vite"
+  }
+}

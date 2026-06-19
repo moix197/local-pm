@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadProjects, normalizeCommands } from '../config.js';
+import {
+  loadProjects,
+  normalizeCommands,
+  addProject,
+  removeProject,
+  updateProject,
+} from '../config.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const projectsFile = path.join(repoRoot, 'projects.json');
@@ -87,4 +93,83 @@ test('normalizeCommands: throws on malformed commands', () => {
 
 test('normalizeCommands: absent value yields []', () => {
   assert.deepEqual(normalizeCommands(undefined), []);
+});
+
+const tmpFile = projectsFile + '.tmp';
+
+test('addProject: persists a new entry and leaves no orphaned .tmp', () => {
+  withProjectsFile(() => {
+    fs.writeFileSync(projectsFile, JSON.stringify([]) + '\n', 'utf8');
+    addProject({ name: 'alpha', root: 'C:/p/alpha', type: 'plain' });
+    const raw = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+    assert.equal(raw.length, 1);
+    assert.equal(raw[0].name, 'alpha');
+    assert.equal(raw[0].root, 'C:/p/alpha');
+    assert.ok(!fs.existsSync(tmpFile), 'no orphaned .tmp after success');
+  });
+});
+
+test('addProject: replaces an existing entry with the same root', () => {
+  withProjectsFile(() => {
+    fs.writeFileSync(
+      projectsFile,
+      JSON.stringify([{ name: 'old', root: 'C:/p/x', type: 'plain' }]) + '\n',
+      'utf8',
+    );
+    addProject({ name: 'new', root: 'C:/p/x', type: 'docker' });
+    const raw = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+    assert.equal(raw.length, 1);
+    assert.equal(raw[0].name, 'new');
+    assert.equal(raw[0].type, 'docker');
+  });
+});
+
+test('removeProject: removes the matching entry and reports success', () => {
+  withProjectsFile(() => {
+    fs.writeFileSync(
+      projectsFile,
+      JSON.stringify([
+        { name: 'a', root: 'C:/p/a' },
+        { name: 'b', root: 'C:/p/b' },
+      ]) + '\n',
+      'utf8',
+    );
+    const removed = removeProject('C:/p/a');
+    assert.equal(removed, true);
+    const raw = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+    assert.equal(raw.length, 1);
+    assert.equal(raw[0].name, 'b');
+    assert.ok(!fs.existsSync(tmpFile), 'no orphaned .tmp after success');
+  });
+});
+
+test('removeProject: returns false when no entry matches', () => {
+  withProjectsFile(() => {
+    fs.writeFileSync(projectsFile, JSON.stringify([{ name: 'a', root: 'C:/p/a' }]) + '\n', 'utf8');
+    assert.equal(removeProject('C:/p/missing'), false);
+  });
+});
+
+test('updateProject: patches an entry, preserving its root', () => {
+  withProjectsFile(() => {
+    fs.writeFileSync(
+      projectsFile,
+      JSON.stringify([{ name: 'a', root: 'C:/p/a', devCmd: 'npm run dev' }]) + '\n',
+      'utf8',
+    );
+    const updated = updateProject('C:/p/a', { name: 'renamed', devCmd: 'npm run start' });
+    assert.equal(updated.name, 'renamed');
+    assert.equal(updated.devCmd, 'npm run start');
+    assert.equal(updated.root, 'C:/p/a', 'root is immutable');
+    const raw = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+    assert.equal(raw[0].name, 'renamed');
+    assert.ok(!fs.existsSync(tmpFile), 'no orphaned .tmp after success');
+  });
+});
+
+test('updateProject: returns null when no entry matches', () => {
+  withProjectsFile(() => {
+    fs.writeFileSync(projectsFile, JSON.stringify([{ name: 'a', root: 'C:/p/a' }]) + '\n', 'utf8');
+    assert.equal(updateProject('C:/p/missing', { name: 'x' }), null);
+  });
 });

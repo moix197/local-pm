@@ -1,0 +1,6 @@
+{
+  "name": "docker-fixture",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
