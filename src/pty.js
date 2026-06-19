@@ -5,6 +5,11 @@ import { getWorktrees } from './worktrees.js';
 
 export const MAX_SESSIONS = 10;
 
+const SCROLLBACK_MAX_CHUNKS = 5000;
+const SCROLLBACK_MAX_BYTES = 512000;
+const IDLE_TIMEOUT_MS = (Number(process.env.LOCAL_PM_IDLE_TIMEOUT_MINUTES) || 30) * 60 * 1000;
+const HIGH_WATER = 1 << 20; // 1 MB
+
 function detectShell() {
   if (process.env.LOCAL_PM_SHELL) return process.env.LOCAL_PM_SHELL;
   try {
@@ -28,7 +33,11 @@ export function _setSpawnFn(fn) { _spawnFn = fn; }
 let _getWorktrees = getWorktrees;
 export function _setGetWorktreesFn(fn) { _getWorktrees = fn; }
 
-/** @type {Map<string, {id:string, ptyProcess:object, worktreePath:string, kind:string}>} */
+// Injectable timer seam
+let _timerFn = setInterval;
+export function _setTimerFn(fn) { _timerFn = fn; }
+
+/** @type {Map<string, {id:string, ptyProcess:object, worktreePath:string, kind:string, scrollback:string[], scrollbackBytes:number, ws:object|null, idleAt:number}>} */
 const sessions = new Map();
 
 function clampDim(v) {
@@ -37,20 +46,13 @@ function clampDim(v) {
   return Math.min(500, Math.max(1, Math.floor(n)));
 }
 
-/**
- * Spawn a new PTY session.
- * @param {{worktreePath:string, kind:string, cols:number, rows:number}} opts
- * @returns {Promise<{id:string, ptyProcess:object, worktreePath:string, kind:string}>}
- */
 export async function spawnSession({ worktreePath, kind, cols, rows }) {
-  // Invariant 2: kind must be known
   if (!(kind in COMMANDS)) {
     const err = new Error(`invalid kind: ${kind}`);
     err.code = 4403;
     throw err;
   }
 
-  // Invariant 1: worktreePath must match a registered worktree
   const worktrees = await _getWorktrees();
   const entry = worktrees.find((w) => w.path === worktreePath);
   if (!entry) {
@@ -59,19 +61,16 @@ export async function spawnSession({ worktreePath, kind, cols, rows }) {
     throw err;
   }
 
-  // Invariant 3: session cap
   if (sessions.size >= MAX_SESSIONS) {
     const err = new Error('session cap reached');
     err.code = 4429;
     throw err;
   }
 
-  // Invariant 4: cols/rows — clamp to [1, 500]
   const safeCols = clampDim(cols);
   const safeRows = clampDim(rows);
 
   const cmdDef = COMMANDS[kind];
-  // Use the validated path from the registry, never the raw client-supplied path
   const cwd = entry.path;
 
   const ptyProcess = _spawnFn(SHELL, cmdDef.args, {
@@ -83,9 +82,45 @@ export async function spawnSession({ worktreePath, kind, cols, rows }) {
   });
 
   const id = crypto.randomUUID();
-  const session = { id, ptyProcess, worktreePath: cwd, kind };
+  const session = { id, ptyProcess, worktreePath: cwd, kind, scrollback: [], scrollbackBytes: 0, ws: null, idleAt: 0 };
   sessions.set(id, session);
   return session;
+}
+
+export function attachClient(id, ws) {
+  const session = sessions.get(id);
+  if (!session) return;
+  // Replay scrollback
+  for (const chunk of session.scrollback) {
+    ws.send(chunk);
+  }
+  // Set active client
+  session.ws = ws;
+  // Wire live data: onData appends to scrollback ring AND sends if ws open + not over HIGH_WATER
+  session.ptyProcess.onData((data) => {
+    // Append to scrollback ring (byte cap + chunk-count cap, evict from front)
+    session.scrollback.push(data);
+    session.scrollbackBytes += data.length;
+    while (session.scrollbackBytes > SCROLLBACK_MAX_BYTES && session.scrollback.length > 0) {
+      const evicted = session.scrollback.shift();
+      session.scrollbackBytes -= evicted.length;
+    }
+    while (session.scrollback.length > SCROLLBACK_MAX_CHUNKS) {
+      const evicted = session.scrollback.shift();
+      session.scrollbackBytes -= evicted.length;
+    }
+    // Live send with backpressure guard
+    if (session.ws && session.ws.readyState === session.ws.constructor.OPEN && session.ws.bufferedAmount < HIGH_WATER) {
+      session.ws.send(data);
+    }
+  });
+}
+
+export function detachClient(id) {
+  const session = sessions.get(id);
+  if (!session) return;
+  session.ws = null;
+  session.idleAt = Date.now();
 }
 
 export function writeToSession(id, data) {
@@ -114,3 +149,45 @@ export function getSession(id) {
 export function getAllSessions() {
   return [...sessions.values()];
 }
+
+// Idle reaper
+let _reaperInterval = null;
+
+function startReaper() {
+  _reaperInterval = _timerFn(() => {
+    const now = Date.now();
+    for (const [id, session] of sessions) {
+      if (!session.ws && session.idleAt > 0 && now - session.idleAt > IDLE_TIMEOUT_MS) {
+        console.log(`[pty] reaped idle session ${id}`);
+        killSession(id);
+      }
+    }
+  }, 60000);
+  // unref so the interval doesn't prevent Node.js from exiting when idle
+  if (_reaperInterval && typeof _reaperInterval.unref === 'function') {
+    _reaperInterval.unref();
+  }
+}
+
+startReaper();
+
+export function _restartReaper() {
+  if (_reaperInterval !== null) {
+    clearInterval(_reaperInterval);
+    _reaperInterval = null;
+  }
+  startReaper();
+}
+
+export function shutdown() {
+  if (_reaperInterval !== null) {
+    clearInterval(_reaperInterval);
+    _reaperInterval = null;
+  }
+  for (const id of [...sessions.keys()]) {
+    killSession(id);
+  }
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

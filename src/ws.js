@@ -2,10 +2,9 @@ import crypto from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import { readToken } from './token.js';
 import { getLanIPv4 } from './netinfo.js';
-import { spawnSession, writeToSession, resizeSession, killSession } from './pty.js';
+import { spawnSession, writeToSession, resizeSession, getSession, attachClient, detachClient } from './pty.js';
 
 const PORT = Number(process.env.LOCAL_PM_PORT) || 7420;
-const HIGH_WATER = 1 << 20; // 1MB
 
 // Injectable seams for tests
 let _readToken = readToken;
@@ -64,6 +63,27 @@ export function authorizeUpgrade(req, port) {
   return { ok: true };
 }
 
+function wireMessageHandler(id, ws) {
+  ws.on('message', (data) => {
+    try {
+      const str = data.toString();
+      let parsed;
+      try { parsed = JSON.parse(str); } catch { parsed = null; }
+      if (parsed && parsed.resize && typeof parsed.resize === 'object') {
+        const c = Number(parsed.resize.cols);
+        const r = Number(parsed.resize.rows);
+        if (Number.isFinite(c) && Number.isFinite(r) && c > 0 && r > 0) {
+          resizeSession(id, c, r);
+        }
+      } else {
+        writeToSession(id, str);
+      }
+    } catch {
+      // malformed frame must never throw out of handler
+    }
+  });
+}
+
 /**
  * Attach the WebSocket server to an existing HTTP server.
  * @param {import('node:http').Server} server
@@ -96,49 +116,31 @@ export function attachWebSocket(server) {
     const kind = url.searchParams.get('kind') ?? 'shell';
     const cols = Number(url.searchParams.get('cols')) || 80;
     const rows = Number(url.searchParams.get('rows')) || 24;
+    const sessionId = url.searchParams.get('sessionId') ?? '';
 
     // Log only the pathname, never full URL/query
     const pathname = url.pathname;
 
-    spawnSession({ worktreePath, kind, cols, rows })
-      .then((session) => {
-        const { id, ptyProcess } = session;
-
-        ptyProcess.onData((data) => {
-          if (ws.readyState === ws.constructor.OPEN && ws.bufferedAmount < HIGH_WATER) {
-            ws.send(data);
-          }
+    const existing = sessionId ? getSession(sessionId) : null;
+    if (existing) {
+      // Reattach path
+      attachClient(existing.id, ws);
+      wireMessageHandler(existing.id, ws);
+      ws.on('close', () => detachClient(existing.id));
+    } else {
+      // New session path
+      spawnSession({ worktreePath, kind, cols, rows })
+        .then((session) => {
+          attachClient(session.id, ws);
+          wireMessageHandler(session.id, ws);
+          ws.on('close', () => detachClient(session.id));
+          console.log(`[ws] ${pathname} session started id=${session.id}`);
+        })
+        .catch((err) => {
+          const code = err.code === 4429 ? 4429 : 4403;
+          ws.close(code, err.message ?? 'session error');
+          console.log(`[ws] ${pathname} session rejected: ${err.message}`);
         });
-
-        ws.on('message', (data) => {
-          try {
-            const str = data.toString();
-            let parsed;
-            try { parsed = JSON.parse(str); } catch { parsed = null; }
-            if (parsed && parsed.resize && typeof parsed.resize === 'object') {
-              const c = Number(parsed.resize.cols);
-              const r = Number(parsed.resize.rows);
-              if (Number.isFinite(c) && Number.isFinite(r) && c > 0 && r > 0) {
-                resizeSession(id, c, r);
-              }
-            } else {
-              writeToSession(id, str);
-            }
-          } catch {
-            // malformed frame must never throw out of handler
-          }
-        });
-
-        ws.on('close', () => {
-          killSession(id);
-        });
-
-        console.log(`[ws] ${pathname} session started`);
-      })
-      .catch((err) => {
-        const code = err.code === 4429 ? 4429 : 4403;
-        ws.close(code, err.message ?? 'session error');
-        console.log(`[ws] ${pathname} session rejected: ${err.message}`);
-      });
+    }
   });
 }
