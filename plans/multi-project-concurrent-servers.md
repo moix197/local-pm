@@ -188,15 +188,15 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 
 **Steps:**
 
-- [ ] Create `detect.js` with `autoDetectProject(folderPath)`: **security gate first** — call `fs.stat(folderPath)` and throw `'not a directory'` if it fails or is not a directory (prevents path-traversal saves and later spawn of nonexistent paths); then check `.git-wt.json` presence; check compose file presence; read `package.json` scripts — populate `devCmd` from `scripts.dev` or `scripts.start` only (never accept a dev command from user-typed input); set `needsSetup:true` if devCmd is null or portVars list is ambiguous
-- [ ] Add `addProject`, `removeProject`, `updateProject` to `config.js`; implement atomic write for all three: `JSON.stringify` → write to `projects.json.tmp` → `fs.renameSync` to `projects.json`; a crash between write and rename leaves `.tmp` (recoverable), never a half-written `projects.json`
-- [ ] Add the four `/api/projects/*` routes to `server.js`; keep route handler thin (logic in config.js / detect.js)
-- [ ] Add "Add project" UI to `public/index.html`: path input → POST → response includes detected `devCmd` → always display `devCmd` in the project row before enabling Start (user sees what will be spawned); if `needsSetup:true` show inline form pre-filled with detected value for confirmation → PATCH on submit; per-row Edit and Remove
-- [ ] Create fixture directories for `detect.test.js` (one git-wt fixture, one Docker fixture, one plain fixture, one ambiguous fixture)
-- [ ] Create `detect.test.js`
-- [ ] Update `config.test.js` with CRUD + atomic-write cases
-- [ ] Update `server.test.js` with project-route cases
-- [ ] Update README: document "Adding a project" workflow, auto-detection logic, setup form fallback
+- [x] Create `detect.js` with `autoDetectProject(folderPath)`: **security gate first** — call `fs.stat(folderPath)` and throw `'not a directory'` if it fails or is not a directory (prevents path-traversal saves and later spawn of nonexistent paths); then check `.git-wt.json` presence; check compose file presence; read `package.json` scripts — populate `devCmd` from `scripts.dev` or `scripts.start` only (never accept a dev command from user-typed input); set `needsSetup:true` if devCmd is null or portVars list is ambiguous
+- [x] Add `addProject`, `removeProject`, `updateProject` to `config.js`; implement atomic write for all three: `JSON.stringify` → write to `projects.json.tmp` → `fs.renameSync` to `projects.json`; a crash between write and rename leaves `.tmp` (recoverable), never a half-written `projects.json`
+- [x] Add the four `/api/projects/*` routes to `server.js`; keep route handler thin (logic in config.js / detect.js)
+- [x] Add "Add project" UI to `public/index.html`: path input → POST → response includes detected `devCmd` → always display `devCmd` in the project row before enabling Start (user sees what will be spawned); if `needsSetup:true` show inline form pre-filled with detected value for confirmation → PATCH on submit; per-row Edit and Remove
+- [x] Create fixture directories for `detect.test.js` (one git-wt fixture, one Docker fixture, one plain fixture, one ambiguous fixture)
+- [x] Create `detect.test.js`
+- [x] Update `config.test.js` with CRUD + atomic-write cases
+- [x] Update `server.test.js` with project-route cases
+- [x] Update README: document "Adding a project" workflow, auto-detection logic, setup form fallback
 
 **Tests:**
 
@@ -208,7 +208,7 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 
 **Verification:**
 
-- [ ] Automated tests pass: `pnpm test`
+- [x] Automated tests pass: `pnpm test`
 - [ ] Manually add a plain project (e.g. freelo) via UI path input; confirm it appears in list and Start works
 - [ ] Add a git-wt project; confirm type detected correctly and no setup form shown
 - [ ] Add a project with no `dev` script; confirm setup form appears; fill it in; confirm project saved and Start works
@@ -220,12 +220,12 @@ No worktree creation is needed. Skip this phase and proceed to P1 unless the use
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (see Documentation section)
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
+- [x] Tests for this phase written and passing
+- [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat: project CRUD — add/edit/remove via UI with auto-detection`
+- [x] Changes committed: `feat: project CRUD — add/edit/remove via UI with auto-detection`
 - [ ] Phase marked complete
 
 ---
