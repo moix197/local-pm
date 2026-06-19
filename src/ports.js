@@ -1,4 +1,6 @@
 import { getAllStatuses } from './runner.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const POOL_START = 3100;
 const POOL_END = 3199; // inclusive
@@ -48,4 +50,168 @@ export function assignPort(worktreePath) {
  */
 export function releasePort(worktreePath) {
   allocated.delete(worktreePath);
+}
+
+/**
+ * Read the git-wt port offset for a given branch from `.git/git-wt-ports.json`.
+ * Returns null (never throws) when file is absent, branch key is missing, or JSON is malformed.
+ * @param {string} projectRoot
+ * @param {string} branch
+ * @returns {{ offset: number } | null}
+ */
+export function readGitWtOffset(projectRoot, branch) {
+  const filePath = path.join(projectRoot, '.git', 'git-wt-ports.json');
+  let raw;
+  try {
+    raw = fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.warn(`[local-pm] git-wt-ports.json at ${filePath} is malformed JSON — ignoring`);
+    return null;
+  }
+  if (parsed[branch] == null) return null;
+  return { offset: parsed[branch] };
+}
+
+/**
+ * Scan compose files in projectRoot for port variable placeholders.
+ * Returns [{varName, base}] where base is the container-side port number (right of colon),
+ * or null if no colon or the right side is not a plain number.
+ * Uses no yaml parser — string/regex only.
+ * @param {string} projectRoot
+ * @returns {Array<{varName: string, base: number|null}>}
+ */
+export function scanComposePortVars(projectRoot) {
+  const composeNames = [
+    'docker-compose.yml',
+    'docker-compose.yaml',
+    'compose.yml',
+    'compose.yaml',
+  ];
+
+  const results = [];
+
+  for (const name of composeNames) {
+    const filePath = path.join(projectRoot, name);
+    if (!fs.existsSync(filePath)) continue;
+
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n');
+
+    // Track whether we're inside a ports: section.
+    let inPorts = false;
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Detect entering a ports: block.
+      if (/^ports\s*:/.test(trimmed)) {
+        inPorts = true;
+        continue;
+      }
+
+      // Leaving ports block when we hit a new top-level key (non-indented non-list line).
+      if (inPorts && trimmed && !trimmed.startsWith('-') && /^\w/.test(trimmed)) {
+        inPorts = false;
+      }
+
+      if (!inPorts) continue;
+      if (!trimmed.startsWith('-')) continue;
+
+      // Line has a port entry — look for ${VARNAME} pattern.
+      const varMatch = trimmed.match(/\$\{([^}]+)\}/);
+      if (!varMatch) continue;
+
+      const varName = varMatch[1];
+
+      // Extract the port mapping. Format: "${VARNAME}:NUMBER" or "${VARNAME}:${OTHER}"
+      // Strip surrounding quotes and dashes to get the raw mapping string.
+      const mappingMatch = trimmed.match(/-\s*["']?(.+?)["']?\s*$/);
+      let base = null;
+      if (mappingMatch) {
+        const mapping = mappingMatch[1].replace(/^["']|["']$/g, '');
+        // Find the colon that separates host:container (not inside ${}).
+        const colonIdx = mapping.indexOf(':');
+        if (colonIdx !== -1) {
+          const rightSide = mapping.slice(colonIdx + 1);
+          // Only use as base if it's a plain number (not another variable).
+          if (/^\d+$/.test(rightSide.trim())) {
+            base = Number(rightSide.trim());
+          }
+        }
+      }
+
+      // Avoid duplicate entries for the same varName.
+      if (!results.some((r) => r.varName === varName)) {
+        results.push({ varName, base });
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Slugify a string for use as a docker compose project name.
+ * Replaces non-alphanumeric chars with hyphens, collapses multiples, trims.
+ * @param {string} str
+ * @returns {string}
+ */
+function slugify(str) {
+  return str
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * Build the environment variables to inject when starting a server for a worktree.
+ * Dispatches on worktree.type:
+ *   - 'git-wt': uses git-wt-ports.json offset + compose port vars; falls back to assignPort
+ *   - 'docker': assigns pool ports per compose var; sets COMPOSE_PROJECT_NAME
+ *   - everything else (plain): assigns a single PORT from the pool
+ * @param {{ project: string, branch: string, path: string, type?: string }} worktree
+ * @returns {Record<string, string>}
+ */
+export function buildEnvForTarget(worktree) {
+  const { project, branch, path: wtPath, type } = worktree;
+
+  if (type === 'git-wt') {
+    const offsetResult = readGitWtOffset(wtPath, branch);
+    if (offsetResult !== null) {
+      const { offset } = offsetResult;
+      const vars = scanComposePortVars(wtPath);
+      const env = {};
+      for (const { varName, base } of vars) {
+        if (base != null) {
+          env[varName] = String(offset + base);
+        }
+      }
+      env.COMPOSE_PROJECT_NAME = slugify(`${project}-${branch}`);
+      return env;
+    }
+    // Fall through to plain assignPort if offset not found.
+    const port = assignPort(wtPath);
+    return { PORT: String(port) };
+  }
+
+  if (type === 'docker') {
+    const vars = scanComposePortVars(wtPath);
+    const env = {};
+    for (const { varName, base } of vars) {
+      const key = `${wtPath}:${varName}`;
+      const port = assignPort(key);
+      env[varName] = String(port);
+    }
+    env.COMPOSE_PROJECT_NAME = slugify(`${project}-${branch}`);
+    return env;
+  }
+
+  // Plain: single PORT from the pool.
+  const port = assignPort(wtPath);
+  return { PORT: String(port) };
 }

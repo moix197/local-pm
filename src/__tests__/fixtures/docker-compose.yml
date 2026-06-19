@@ -1,0 +1,7 @@
+version: "3"
+services:
+  app:
+    image: node:22
+    ports:
+      - "${APP_PORT}:3000"
+      - "${WS_HOST_PORT}:3001"

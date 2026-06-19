@@ -2,7 +2,7 @@ import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
-import { releasePort } from './ports.js';
+import { releasePort, buildEnvForTarget } from './ports.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -41,10 +41,13 @@ let _killFn = _defaultKill;
 /** @internal — unit tests only */
 export function _setKillFn(fn) { _killFn = fn; }
 
-// Production docker stop
-async function _defaultDockerDown(cwd) {
+// Production docker stop — accepts optional projectName for scoped compose down.
+async function _defaultDockerDown(cwd, projectName) {
   try {
-    await execFileAsync('docker', ['compose', 'down'], { cwd });
+    const args = projectName
+      ? ['compose', '--project-name', projectName, 'down']
+      : ['compose', 'down'];
+    await execFileAsync('docker', args, { cwd });
   } catch {
     /* worktree may have no compose file */
   }
@@ -130,7 +133,8 @@ function spawnDevServer(worktreePath, meta, env) {
     branch: meta?.branch ?? null,
     path: worktreePath,
     pid: child.pid,
-    port: env?.PORT ?? null,
+    port: env?.PORT ?? env?.APP_PORT ?? null,
+    env,
     startedAt: Date.now(),
   });
   appendLog(worktreePath, `[local-pm] dev server started (pid ${child.pid}) at ${worktreePath}`);
@@ -199,7 +203,7 @@ function failCommand(worktreePath, err) {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function startServer(worktreePath, meta, env) {
+export async function startServer(worktreePath, meta) {
   // Per-target guard: reject concurrent starts on the same path (rapid double-click).
   if (inProgress.get(worktreePath)) return getStatus(worktreePath);
   inProgress.set(worktreePath, true);
@@ -209,10 +213,12 @@ export async function startServer(worktreePath, meta, env) {
       return getStatus(worktreePath);
     }
     if (active.has(worktreePath)) await stopServer(worktreePath);
+    const safeMeta = { project: null, branch: null, type: 'plain', ...(meta ?? {}), path: worktreePath };
+    const derivedEnv = buildEnvForTarget(safeMeta);
     if (!fs.existsSync(path.join(worktreePath, 'node_modules'))) {
-      await runNpmInstall(worktreePath, env);
+      await runNpmInstall(worktreePath, derivedEnv);
     }
-    spawnDevServer(worktreePath, meta, env);
+    spawnDevServer(worktreePath, meta, derivedEnv);
   } finally {
     inProgress.set(worktreePath, false);
   }
@@ -225,7 +231,8 @@ export async function stopServer(worktreePath) {
   active.delete(worktreePath);
   await _killFn(entry.pid);
   try {
-    await _dockerDownFn(entry.path);
+    const projectName = entry.env?.COMPOSE_PROJECT_NAME ?? null;
+    await _dockerDownFn(entry.path, projectName);
   } catch {
     /* docker down errors are always ignored */
   }

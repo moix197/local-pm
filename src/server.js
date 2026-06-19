@@ -13,7 +13,6 @@ import {
   getAllStatuses,
   getLogs,
 } from './runner.js';
-import { assignPort } from './ports.js';
 import { getLanIPv4 } from './netinfo.js';
 import { ensureToken, isAuthorized } from './token.js';
 
@@ -21,7 +20,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const indexHtml = path.join(repoRoot, 'public', 'index.html');
 
 const PORT = Number(process.env.LOCAL_PM_PORT) || 7420;
-const DEV_PORT = 3000;
 
 function sendJson(res, code, obj) {
   const body = JSON.stringify(obj);
@@ -53,10 +51,12 @@ function serveIndex(res) {
 
 async function handleState(res) {
   const lanIp = getLanIPv4();
+  const running = getAllStatuses();
+  const firstPort = running[0]?.port ?? null;
   sendJson(res, 200, {
     worktrees: await getWorktrees(),
-    running: getAllStatuses(),
-    lanUrl: `http://${lanIp}:${DEV_PORT}`,
+    running,
+    lanUrl: firstPort ? `http://${lanIp}:${firstPort}` : null,
     serverPort: PORT,
   });
 }
@@ -75,14 +75,8 @@ async function handleStart(req, res) {
   if (!known || !fs.existsSync(worktreePath)) {
     return sendJson(res, 400, { error: `unknown or missing worktree path: ${worktreePath}` });
   }
-  const meta = { project: known.project, branch: known.branch };
-  let port;
-  try {
-    port = assignPort(worktreePath);
-  } catch (err) {
-    return sendJson(res, 503, { error: err.message });
-  }
-  await startServer(worktreePath, meta, { PORT: String(port) });
+  const meta = { project: known.project, branch: known.branch, path: worktreePath, type: known.type };
+  await startServer(worktreePath, meta);
   sendJson(res, 200, getStatus(worktreePath));
 }
 

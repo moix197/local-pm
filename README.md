@@ -41,6 +41,34 @@ while its console panel is open, so idle servers cost nothing.
 > The lazy log-fetch design is intentionally forward-compatible with the planned
 > interactive-terminal upgrade (PRD 2: node-pty + WebSocket + xterm.js).
 
+## Hybrid port model
+
+local-pm selects port assignments based on the worktree's `type` field (set in `projects.json` or passed by git-wt):
+
+| Type | How ports are assigned |
+|---|---|
+| `git-wt` | Reads `.git/git-wt-ports.json` in the project root. Each branch maps to a numeric offset. For each `${VAR}:PORT` entry in a compose file, sets `VAR = offset + PORT`. Falls back to pool if offset file is absent. |
+| `docker` | Scans compose files for `${VAR}:PORT` entries; assigns a pool port per variable. Sets `COMPOSE_PROJECT_NAME` so `docker compose down` is scoped to this worktree only. |
+| plain (default) | Assigns one port from the 3100–3199 pool and injects it as `PORT`. |
+
+### git-wt offset file
+
+git-wt writes `.git/git-wt-ports.json` at the project root — a JSON object mapping branch names to integer offsets:
+
+```json
+{
+  "main": 0,
+  "feat/my-feature": 10,
+  "hotfix": 20
+}
+```
+
+local-pm reads this file on start. If the branch key is missing or the file is absent, it falls back to pool assignment.
+
+### Scoped docker compose down
+
+When a worktree has a `COMPOSE_PROJECT_NAME` (set during start), `docker compose down` is called with `--project-name <name>` so only that worktree's containers are stopped, not all compose services on the machine.
+
 ## Requirements
 
 - **Node.js v22+** (uses the built-in `node:test` runner and modern ESM features).

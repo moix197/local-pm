@@ -58,7 +58,7 @@ server.registerTool('list_worktrees', { description: 'List all git worktrees kno
 server.registerTool('status', { description: 'Get the current dev server status from the daemon' }, async () => {
   try {
     const state = await apiCall('GET', '/api/state');
-    return toResult(state.status);
+    return toResult(state.running);
   } catch (err) {
     return toError(err);
   }
@@ -80,14 +80,21 @@ server.registerTool(
   },
 );
 
-server.registerTool('stop_server', { description: 'Stop the currently running dev server' }, async () => {
-  try {
-    const result = await apiCall('POST', '/api/stop');
-    return toResult(result);
-  } catch (err) {
-    return toError(err);
-  }
-});
+server.registerTool(
+  'stop_server',
+  {
+    description: 'Stop the dev server for a given worktree path',
+    inputSchema: { path: z.string().describe('Absolute path to the worktree to stop') },
+  },
+  async ({ path: worktreePath }) => {
+    try {
+      const result = await apiCall('POST', '/api/stop', { path: worktreePath });
+      return toResult(result);
+    } catch (err) {
+      return toError(err);
+    }
+  },
+);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

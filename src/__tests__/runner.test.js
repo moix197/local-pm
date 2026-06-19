@@ -81,7 +81,7 @@ describe('getStatus', () => {
     runner._setSpawnFn(makeSpawnStub(refs));
 
     const fakePath = 'C:\\fake\\worktreeA';
-    await runner.startServer(fakePath, { project: 'proj', branch: 'feat' }, { PORT: '3100' });
+    await runner.startServer(fakePath, { project: 'proj', branch: 'feat', path: fakePath, type: 'plain' });
 
     const s = runner.getStatus(fakePath);
     assert.equal(s.installing, false);
@@ -89,7 +89,9 @@ describe('getStatus', () => {
     assert.equal(s.active.branch, 'feat');
     assert.equal(s.active.project, 'proj');
     assert.equal(s.active.path, fakePath);
-    assert.equal(s.active.port, '3100');
+    // port comes from pool — just verify it's a numeric string
+    assert.ok(s.active.port != null, 'port should be set');
+    assert.ok(Number(s.active.port) >= 3100, 'port in pool range');
     assert.equal(s.active.pid, 2000);
     assert.ok(typeof s.active.startedAt === 'number');
   });
@@ -107,7 +109,7 @@ describe('getStatus', () => {
     });
 
     const fakePath = 'C:\\fake\\worktreeB';
-    const startP = runner.startServer(fakePath, {}, {});
+    const startP = runner.startServer(fakePath, {});
 
     await Promise.resolve();
     await Promise.resolve();
@@ -124,17 +126,20 @@ describe('getStatus', () => {
 // ---------------------------------------------------------------------------
 
 describe('spawn env merge', () => {
-  it('merges caller env over process.env in the dev spawn options', async () => {
+  it('merges buildEnvForTarget result over process.env in the dev spawn options', async () => {
     const refs = {};
     runner._setSpawnFn(makeSpawnStub(refs));
 
-    await runner.startServer('C:\\fake\\envWt', { project: 'p', branch: 'env' }, { PORT: '3150' });
+    const wtPath = 'C:\\fake\\envWt';
+    await runner.startServer(wtPath, { project: 'p', branch: 'env', path: wtPath, type: 'plain' });
 
     // Second spawn is the dev server.
     const devOpts = refs.opts[1];
     assert.equal(devOpts.shell, true);
-    assert.equal(devOpts.cwd, 'C:\\fake\\envWt');
-    assert.equal(devOpts.env.PORT, '3150', 'caller PORT injected');
+    assert.equal(devOpts.cwd, wtPath);
+    // PORT is assigned from the pool (plain type)
+    assert.ok(devOpts.env.PORT, 'PORT should be injected by buildEnvForTarget');
+    assert.ok(Number(devOpts.env.PORT) >= 3100, 'PORT should be in pool range');
     // A representative process.env key must survive the merge (PATH on win, Path fallback).
     const procKey = process.env.PATH !== undefined ? 'PATH' : Object.keys(process.env)[0];
     assert.equal(devOpts.env[procKey], process.env[procKey], 'process.env preserved in merge');
@@ -151,7 +156,7 @@ describe('getLogs', () => {
     runner._setSpawnFn(makeSpawnStub(refs));
 
     const p = 'C:\\fake\\worktreeC';
-    await runner.startServer(p, {}, {});
+    await runner.startServer(p, {});
 
     const chunk = Array.from({ length: 310 }, (_, i) => `line-${i}`).join('\n');
     refs.dev?.stdout.emit('data', chunk);
@@ -164,7 +169,7 @@ describe('getLogs', () => {
     const refs = {};
     runner._setSpawnFn(makeSpawnStub(refs));
     const p = 'C:\\fake\\copyWt';
-    await runner.startServer(p, {}, {});
+    await runner.startServer(p, {});
     const copy1 = runner.getLogs(p);
     copy1.push('poisoned');
     const copy2 = runner.getLogs(p);
@@ -174,12 +179,12 @@ describe('getLogs', () => {
   it('keeps each server log buffer isolated', async () => {
     const refsA = {};
     runner._setSpawnFn(makeSpawnStub(refsA));
-    await runner.startServer('C:\\fake\\logA', {}, {});
+    await runner.startServer('C:\\fake\\logA', {});
     refsA.dev?.stdout.emit('data', 'only-in-A\n');
 
     const refsB = {};
     runner._setSpawnFn(makeSpawnStub(refsB));
-    await runner.startServer('C:\\fake\\logB', {}, {});
+    await runner.startServer('C:\\fake\\logB', {});
     refsB.dev?.stdout.emit('data', 'only-in-B\n');
 
     const logsA = runner.getLogs('C:\\fake\\logA');
@@ -199,29 +204,31 @@ describe('concurrent servers', () => {
   it('keeps two servers active at the same time', async () => {
     const refsA = {};
     runner._setSpawnFn(makeSpawnStub(refsA));
-    await runner.startServer('C:\\fake\\A', { project: 'p', branch: 'a' }, { PORT: '3100' });
+    await runner.startServer('C:\\fake\\A', { project: 'p', branch: 'a', path: 'C:\\fake\\A', type: 'plain' });
 
     const refsB = {};
     runner._setSpawnFn(makeSpawnStub(refsB));
-    await runner.startServer('C:\\fake\\B', { project: 'p', branch: 'b' }, { PORT: '3101' });
+    await runner.startServer('C:\\fake\\B', { project: 'p', branch: 'b', path: 'C:\\fake\\B', type: 'plain' });
 
     const all = runner.getAllStatuses();
     assert.equal(all.length, 2, 'both servers should be active');
     const byPath = new Map(all.map((s) => [s.path, s]));
     assert.equal(byPath.get('C:\\fake\\A').branch, 'a');
     assert.equal(byPath.get('C:\\fake\\B').branch, 'b');
-    assert.equal(byPath.get('C:\\fake\\A').port, '3100');
-    assert.equal(byPath.get('C:\\fake\\B').port, '3101');
+    // Ports are assigned from pool — just verify both are set and distinct
+    assert.ok(byPath.get('C:\\fake\\A').port != null, 'A port should be set');
+    assert.ok(byPath.get('C:\\fake\\B').port != null, 'B port should be set');
+    assert.notEqual(byPath.get('C:\\fake\\A').port, byPath.get('C:\\fake\\B').port, 'ports should be distinct');
   });
 
   it('stopping one server leaves the other running', async () => {
     const refsA = {};
     runner._setSpawnFn(makeSpawnStub(refsA));
-    await runner.startServer('C:\\fake\\KeepA', { project: 'p', branch: 'a' }, { PORT: '3100' });
+    await runner.startServer('C:\\fake\\KeepA', { project: 'p', branch: 'a', path: 'C:\\fake\\KeepA', type: 'plain' });
 
     const refsB = {};
     runner._setSpawnFn(makeSpawnStub(refsB));
-    await runner.startServer('C:\\fake\\KeepB', { project: 'p', branch: 'b' }, { PORT: '3101' });
+    await runner.startServer('C:\\fake\\KeepB', { project: 'p', branch: 'b', path: 'C:\\fake\\KeepB', type: 'plain' });
 
     await runner.stopServer('C:\\fake\\KeepA');
 
@@ -243,8 +250,8 @@ describe('concurrent servers', () => {
     });
 
     const fakePath = 'C:\\fake\\Dup';
-    const p1 = runner.startServer(fakePath, { project: 'p', branch: 'x' }, {});
-    const p2 = runner.startServer(fakePath, { project: 'p', branch: 'x' }, {});
+    const p1 = runner.startServer(fakePath, { project: 'p', branch: 'x', path: fakePath, type: 'plain' });
+    const p2 = runner.startServer(fakePath, { project: 'p', branch: 'x', path: fakePath, type: 'plain' });
 
     const r2 = await p2;
     assert.equal(r2.active, null, 'second call returns idle while first is in flight');
@@ -270,7 +277,7 @@ describe('stopServer', () => {
     const refs = {};
     runner._setSpawnFn(makeSpawnStub(refs));
     const p = 'C:\\fake\\DockerErr';
-    await runner.startServer(p, { project: 'p', branch: 'main' }, {});
+    await runner.startServer(p, { project: 'p', branch: 'main' });
     assert.notEqual(runner.getStatus(p).active, null);
 
     runner._setDockerDownFn(async () => { throw new Error('docker not available'); });
@@ -279,16 +286,87 @@ describe('stopServer', () => {
     await assert.doesNotReject(() => runner.stopServer(p));
     assert.equal(runner.getStatus(p).active, null, 'active must be null after stop');
   });
+
+  it('passes --project-name to docker compose down when COMPOSE_PROJECT_NAME is in entry env', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-runner-test-'));
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'docker-compose.yml'),
+        'version: "3"\nservices:\n  app:\n    image: node:22\n    ports:\n      - "${APP_PORT}:3000"\n',
+      );
+
+      const dockerDownCalls = [];
+      runner._setDockerDownFn(async (cwd, projectName) => {
+        dockerDownCalls.push({ cwd, projectName });
+      });
+
+      const refs = {};
+      runner._setSpawnFn(makeSpawnStub(refs));
+      runner._setDockerRunningFn(async () => true);
+
+      await runner.startServer(tmpDir, { project: 'myproj', branch: 'main', path: tmpDir, type: 'docker' });
+      await runner.stopServer(tmpDir);
+
+      assert.equal(dockerDownCalls.length, 1, 'docker compose down called once');
+      assert.ok(dockerDownCalls[0].projectName, 'projectName should be set');
+      assert.ok(
+        typeof dockerDownCalls[0].projectName === 'string' && dockerDownCalls[0].projectName.length > 0,
+        'projectName should be a non-empty string',
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('stopping server A only calls docker compose down once (for A), B stays running', async () => {
+    const tmpA = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-runner-test-'));
+    const tmpB = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-runner-test-'));
+    try {
+      const composeContent = 'version: "3"\nservices:\n  app:\n    image: node:22\n    ports:\n      - "${APP_PORT}:3000"\n';
+      fs.writeFileSync(path.join(tmpA, 'docker-compose.yml'), composeContent);
+      fs.writeFileSync(path.join(tmpB, 'docker-compose.yml'), composeContent);
+
+      const dockerDownCalls = [];
+      runner._setDockerDownFn(async (cwd, projectName) => {
+        dockerDownCalls.push({ cwd, projectName });
+      });
+      runner._setDockerRunningFn(async () => true);
+
+      const refsA = {};
+      runner._setSpawnFn(makeSpawnStub(refsA));
+      await runner.startServer(tmpA, { project: 'projA', branch: 'main', path: tmpA, type: 'docker' });
+
+      const refsB = {};
+      runner._setSpawnFn(makeSpawnStub(refsB));
+      await runner.startServer(tmpB, { project: 'projB', branch: 'main', path: tmpB, type: 'docker' });
+
+      dockerDownCalls.length = 0; // reset after starts
+
+      await runner.stopServer(tmpA);
+
+      assert.equal(dockerDownCalls.length, 1, 'docker compose down called exactly once');
+      assert.ok(
+        dockerDownCalls[0].projectName && dockerDownCalls[0].projectName.includes('projA'),
+        `expected projA in projectName, got: ${dockerDownCalls[0].projectName}`,
+      );
+      assert.notEqual(runner.getStatus(tmpB).active, null, 'B still running');
+
+      await runner.stopServer(tmpB);
+    } finally {
+      fs.rmSync(tmpA, { recursive: true, force: true });
+      fs.rmSync(tmpB, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('stopAll', () => {
   it('stops every running server', async () => {
     const refsA = {};
     runner._setSpawnFn(makeSpawnStub(refsA));
-    await runner.startServer('C:\\fake\\AllA', { project: 'p', branch: 'a' }, { PORT: '3100' });
+    await runner.startServer('C:\\fake\\AllA', { project: 'p', branch: 'a', path: 'C:\\fake\\AllA', type: 'plain' });
     const refsB = {};
     runner._setSpawnFn(makeSpawnStub(refsB));
-    await runner.startServer('C:\\fake\\AllB', { project: 'p', branch: 'b' }, { PORT: '3101' });
+    await runner.startServer('C:\\fake\\AllB', { project: 'p', branch: 'b', path: 'C:\\fake\\AllB', type: 'plain' });
 
     assert.equal(runner.getAllStatuses().length, 2);
     await runner.stopAll();
@@ -311,7 +389,7 @@ describe('spawn error handling', () => {
       return devChild;
     });
 
-    const startP = runner.startServer('C:\\fake\\ErrPath', { project: 'p', branch: 'err-branch' }, {});
+    const startP = runner.startServer('C:\\fake\\ErrPath', { project: 'p', branch: 'err-branch' });
     await assert.doesNotReject(() => startP);
 
     devChild?.emit('error', new Error('ENOENT spawn failed'));
@@ -330,7 +408,7 @@ describe('spawn error handling', () => {
     });
 
     const p = 'C:\\fake\\ErrLogs';
-    await runner.startServer(p, { project: 'p', branch: 'log-branch' }, {});
+    await runner.startServer(p, { project: 'p', branch: 'log-branch' });
     devChild?.emit('error', new Error('ENOENT spawn failed'));
     await Promise.resolve();
     await Promise.resolve();
@@ -351,7 +429,7 @@ describe('spawn error handling', () => {
     });
 
     const p = 'C:\\fake\\ErrIdle';
-    await runner.startServer(p, { project: 'p', branch: 'idle-branch' }, {});
+    await runner.startServer(p, { project: 'p', branch: 'idle-branch' });
     assert.notEqual(runner.getStatus(p).active, null, 'should be active before error');
 
     devChild?.emit('error', new Error('ENOENT spawn failed'));
@@ -382,7 +460,7 @@ describe('spawn error handling', () => {
 
     const p = 'C:\\fake\\InstallErr';
     await assert.doesNotReject(() =>
-      runner.startServer(p, { project: 'p', branch: 'inst-branch' }, {}),
+      runner.startServer(p, { project: 'p', branch: 'inst-branch' }),
     );
 
     const captured = runner.getLogs(p);
@@ -414,7 +492,7 @@ describe('docker preflight', () => {
       });
       runner._setDockerRunningFn(async () => false);
 
-      const status = await runner.startServer(tmpDir, { project: 'p', branch: 'docker-down' }, {});
+      const status = await runner.startServer(tmpDir, { project: 'p', branch: 'docker-down' });
 
       assert.equal(spawnCallCount, 0, 'spawn must not be called when Docker is not running');
       assert.equal(status.active, null, 'active must remain null');
@@ -439,7 +517,7 @@ describe('docker preflight', () => {
       runner._setSpawnFn(makeSpawnStub(refs));
       runner._setDockerRunningFn(async () => true);
 
-      await runner.startServer(tmpDir, { project: 'p', branch: 'docker-up' }, {});
+      await runner.startServer(tmpDir, { project: 'p', branch: 'docker-up' });
 
       assert.notEqual(runner.getStatus(tmpDir).active, null, 'active must be set when Docker is running');
     } finally {
@@ -454,7 +532,7 @@ describe('docker preflight', () => {
       runner._setSpawnFn(makeSpawnStub(refs));
       runner._setDockerRunningFn(async () => false);
 
-      await runner.startServer(tmpDir, { project: 'p', branch: 'no-compose' }, {});
+      await runner.startServer(tmpDir, { project: 'p', branch: 'no-compose' });
 
       assert.notEqual(runner.getStatus(tmpDir).active, null, 'active must be set even though Docker returns false — no compose file');
     } finally {
