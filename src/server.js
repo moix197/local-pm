@@ -3,7 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getWorktrees } from './worktrees.js';
-import { startServer, stopServer, runCommand, stopCommand, getStatus, getLogs } from './runner.js';
+import {
+  startServer,
+  stopServer,
+  stopAll,
+  runCommand,
+  stopCommand,
+  getStatus,
+  getAllStatuses,
+  getLogs,
+} from './runner.js';
+import { assignPort } from './ports.js';
 import { getLanIPv4 } from './netinfo.js';
 import { ensureToken, isAuthorized } from './token.js';
 
@@ -45,11 +55,16 @@ async function handleState(res) {
   const lanIp = getLanIPv4();
   sendJson(res, 200, {
     worktrees: await getWorktrees(),
-    status: getStatus(),
-    logs: getLogs(),
+    running: getAllStatuses(),
     lanUrl: `http://${lanIp}:${DEV_PORT}`,
     serverPort: PORT,
   });
+}
+
+function handleLogs(url, res) {
+  const worktreePath = url.searchParams.get('path');
+  if (!worktreePath) return sendJson(res, 400, { error: 'path is required' });
+  sendJson(res, 200, { logs: getLogs(worktreePath) });
 }
 
 async function handleStart(req, res) {
@@ -61,13 +76,24 @@ async function handleStart(req, res) {
     return sendJson(res, 400, { error: `unknown or missing worktree path: ${worktreePath}` });
   }
   const meta = { project: known.project, branch: known.branch };
-  await startServer(worktreePath, meta);
-  sendJson(res, 200, getStatus());
+  let port;
+  try {
+    port = assignPort(worktreePath);
+  } catch (err) {
+    return sendJson(res, 503, { error: err.message });
+  }
+  await startServer(worktreePath, meta, { PORT: String(port) });
+  sendJson(res, 200, getStatus(worktreePath));
 }
 
-async function handleStop(res) {
-  await stopServer();
-  sendJson(res, 200, getStatus());
+async function handleStop(req, res) {
+  const { path: worktreePath } = await readJsonBody(req);
+  if (worktreePath) {
+    await stopServer(worktreePath);
+  } else {
+    await stopAll();
+  }
+  sendJson(res, 200, { running: getAllStatuses() });
 }
 
 async function handleCommand(req, res) {
@@ -78,9 +104,8 @@ async function handleCommand(req, res) {
   if (!known || !fs.existsSync(worktreePath)) {
     return sendJson(res, 400, { error: `unknown or missing worktree path: ${worktreePath}` });
   }
-  if (getStatus().active) return sendJson(res, 409, { error: 'stop the server first' });
   await runCommand(worktreePath, { cmd, label: label ?? cmd });
-  sendJson(res, 200, getStatus());
+  sendJson(res, 200, getStatus(worktreePath));
 }
 
 function handleStopCommand(res) {
@@ -96,8 +121,9 @@ async function route(req, res) {
   }
   if (method === 'GET' && url.pathname === '/') return serveIndex(res);
   if (method === 'GET' && url.pathname === '/api/state') return handleState(res);
+  if (method === 'GET' && url.pathname === '/api/logs') return handleLogs(url, res);
   if (method === 'POST' && url.pathname === '/api/start') return handleStart(req, res);
-  if (method === 'POST' && url.pathname === '/api/stop') return handleStop(res);
+  if (method === 'POST' && url.pathname === '/api/stop') return handleStop(req, res);
   if (method === 'POST' && url.pathname === '/api/command') return handleCommand(req, res);
   if (method === 'POST' && url.pathname === '/api/command/stop') return handleStopCommand(res);
   sendJson(res, 404, { error: 'not found' });

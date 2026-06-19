@@ -9,9 +9,6 @@ import * as runner from '../runner.js';
 // Stub helpers
 // ---------------------------------------------------------------------------
 
-/**
- * A fake child-process stream: records setEncoding calls, routes on/emit.
- */
 function makeStream() {
   const h = {};
   return {
@@ -21,12 +18,6 @@ function makeStream() {
   };
 }
 
-/**
- * Build a fake child process.
- * @param {number} pid
- * @param {boolean} autoClose - if true, fires 'close' on the child after a
- *   microtask so the caller (runNpmInstall) resolves without manual wiring.
- */
 function makeChild(pid, autoClose = false) {
   const h = {};
   const child = {
@@ -35,10 +26,7 @@ function makeChild(pid, autoClose = false) {
     stderr: makeStream(),
     on(ev, fn) {
       h[ev] = fn;
-      // If autoClose is enabled and a 'close' handler is registered, schedule it.
-      if (autoClose && ev === 'close') {
-        Promise.resolve().then(() => fn());
-      }
+      if (autoClose && ev === 'close') Promise.resolve().then(() => fn());
     },
     emit(ev, data) { h[ev]?.(data); },
   };
@@ -46,29 +34,25 @@ function makeChild(pid, autoClose = false) {
 }
 
 /**
- * Builds a spawn stub that auto-closes for the install child (first spawn)
- * and returns a long-lived dev-server child (second spawn) stored in the
- * returned refs object.
- *
- * refs.dev is populated after the second spawn.
+ * Spawn stub: first call auto-closes (npm install), second returns a long-lived
+ * dev child stored on refs.dev. Also records spawn options on refs.opts (per call).
  */
 function makeSpawnStub(refs = {}) {
   let callCount = 0;
-  return function stub(_cmd, _args, _opts) {
+  refs.opts = [];
+  return function stub(_cmd, _args, opts) {
     callCount += 1;
+    refs.opts.push(opts);
     if (callCount === 1) {
-      // npm install — auto-close so runNpmInstall resolves on its own.
       refs.install = makeChild(callCount * 1000, /* autoClose */ true);
       return refs.install;
     }
-    // npm run dev — long-lived, never auto-closes.
     refs.dev = makeChild(callCount * 1000, /* autoClose */ false);
     refs.callCount = callCount;
     return refs.dev;
   };
 }
 
-/** Install no-op stubs for all injectable seams. */
 function stubAll() {
   runner._setKillFn(async () => {});
   runner._setDockerDownFn(async () => {});
@@ -76,13 +60,9 @@ function stubAll() {
   runner._setSpawnFn(() => makeChild(0, true));
 }
 
-// ---------------------------------------------------------------------------
-// Reset between tests.
-// ---------------------------------------------------------------------------
-
 beforeEach(async () => {
   stubAll();
-  await runner.stopServer();
+  await runner.stopAll();
 });
 
 // ---------------------------------------------------------------------------
@@ -90,8 +70,8 @@ beforeEach(async () => {
 // ---------------------------------------------------------------------------
 
 describe('getStatus', () => {
-  it('returns idle shape when nothing is running', () => {
-    const s = runner.getStatus();
+  it('returns idle shape for an unknown path', () => {
+    const s = runner.getStatus('C:\\fake\\none');
     assert.equal(s.active, null);
     assert.equal(s.installing, false);
   });
@@ -101,21 +81,20 @@ describe('getStatus', () => {
     runner._setSpawnFn(makeSpawnStub(refs));
 
     const fakePath = 'C:\\fake\\worktreeA';
-    await runner.startServer(fakePath, { project: 'proj', branch: 'feat' });
+    await runner.startServer(fakePath, { project: 'proj', branch: 'feat' }, { PORT: '3100' });
 
-    const s = runner.getStatus();
+    const s = runner.getStatus(fakePath);
     assert.equal(s.installing, false);
     assert.notEqual(s.active, null);
     assert.equal(s.active.branch, 'feat');
     assert.equal(s.active.project, 'proj');
     assert.equal(s.active.path, fakePath);
-    // pid is from the second spawn (dev server), which gets pid = 2000
+    assert.equal(s.active.port, '3100');
     assert.equal(s.active.pid, 2000);
     assert.ok(typeof s.active.startedAt === 'number');
   });
 
   it('exposes installing=true while install is in progress, false after', async () => {
-    // Use a manually-controlled install child (no autoClose) to freeze mid-install.
     let installChild;
     let spawnCall = 0;
     runner._setSpawnFn((_cmd, _args, _opts) => {
@@ -128,105 +107,130 @@ describe('getStatus', () => {
     });
 
     const fakePath = 'C:\\fake\\worktreeB';
-    const startP = runner.startServer(fakePath, {});
+    const startP = runner.startServer(fakePath, {}, {});
 
-    // Yield enough microtasks for spawn to be called but install not yet closed.
     await Promise.resolve();
     await Promise.resolve();
-    assert.equal(runner.getStatus().installing, true);
+    assert.equal(runner.getStatus(fakePath).installing, true);
 
-    // Fire close to unblock install.
     installChild?.emit('close');
     await startP;
-    assert.equal(runner.getStatus().installing, false);
+    assert.equal(runner.getStatus(fakePath).installing, false);
   });
 });
 
 // ---------------------------------------------------------------------------
-// getLogs ring-buffer cap
+// env merge with process.env
 // ---------------------------------------------------------------------------
 
-describe('getLogs', () => {
-  it('caps internal buffer at 300 lines after > 300 are pushed', async () => {
+describe('spawn env merge', () => {
+  it('merges caller env over process.env in the dev spawn options', async () => {
     const refs = {};
     runner._setSpawnFn(makeSpawnStub(refs));
 
-    await runner.startServer('C:\\fake\\worktreeC', {});
+    await runner.startServer('C:\\fake\\envWt', { project: 'p', branch: 'env' }, { PORT: '3150' });
 
-    // Emit 310 lines from dev server stdout.
-    const chunk = Array.from({ length: 310 }, (_, i) => `line-${i}`).join('\n');
-    refs.dev?.stdout.emit('data', chunk);
-
-    const captured = runner.getLogs();
-    assert.ok(captured.length <= 300, `expected <=300, got ${captured.length}`);
-  });
-
-  it('returns a copy — caller mutation does not affect internal buffer', () => {
-    const copy1 = runner.getLogs();
-    copy1.push('poisoned');
-    const copy2 = runner.getLogs();
-    assert.ok(!copy2.includes('poisoned'), 'internal log buffer must be mutation-safe');
+    // Second spawn is the dev server.
+    const devOpts = refs.opts[1];
+    assert.equal(devOpts.shell, true);
+    assert.equal(devOpts.cwd, 'C:\\fake\\envWt');
+    assert.equal(devOpts.env.PORT, '3150', 'caller PORT injected');
+    // A representative process.env key must survive the merge (PATH on win, Path fallback).
+    const procKey = process.env.PATH !== undefined ? 'PATH' : Object.keys(process.env)[0];
+    assert.equal(devOpts.env[procKey], process.env[procKey], 'process.env preserved in merge');
   });
 });
 
 // ---------------------------------------------------------------------------
-// startServer auto-stop sequencing
+// getLogs ring-buffer cap and per-path isolation
 // ---------------------------------------------------------------------------
 
-describe('startServer auto-stop sequencing', () => {
-  it('stops the current active server before spawning a new one', async () => {
-    // Start server A.
+describe('getLogs', () => {
+  it('caps a path buffer at 300 lines after > 300 are pushed', async () => {
+    const refs = {};
+    runner._setSpawnFn(makeSpawnStub(refs));
+
+    const p = 'C:\\fake\\worktreeC';
+    await runner.startServer(p, {}, {});
+
+    const chunk = Array.from({ length: 310 }, (_, i) => `line-${i}`).join('\n');
+    refs.dev?.stdout.emit('data', chunk);
+
+    const captured = runner.getLogs(p);
+    assert.ok(captured.length <= 300, `expected <=300, got ${captured.length}`);
+  });
+
+  it('returns a copy — caller mutation does not affect internal buffer', async () => {
+    const refs = {};
+    runner._setSpawnFn(makeSpawnStub(refs));
+    const p = 'C:\\fake\\copyWt';
+    await runner.startServer(p, {}, {});
+    const copy1 = runner.getLogs(p);
+    copy1.push('poisoned');
+    const copy2 = runner.getLogs(p);
+    assert.ok(!copy2.includes('poisoned'), 'internal log buffer must be mutation-safe');
+  });
+
+  it('keeps each server log buffer isolated', async () => {
     const refsA = {};
     runner._setSpawnFn(makeSpawnStub(refsA));
-    await runner.startServer('C:\\fake\\A', { project: 'p', branch: 'a' });
-    assert.notEqual(runner.getStatus().active, null, 'A should be active');
-    assert.equal(runner.getStatus().active.branch, 'a');
+    await runner.startServer('C:\\fake\\logA', {}, {});
+    refsA.dev?.stdout.emit('data', 'only-in-A\n');
 
-    // Start server B while A is active.
     const refsB = {};
     runner._setSpawnFn(makeSpawnStub(refsB));
-    await runner.startServer('C:\\fake\\B', { project: 'p', branch: 'b' });
+    await runner.startServer('C:\\fake\\logB', {}, {});
+    refsB.dev?.stdout.emit('data', 'only-in-B\n');
 
-    const s = runner.getStatus();
-    assert.notEqual(s.active, null, 'B should be active');
-    assert.equal(s.active.branch, 'b', 'active branch should be b');
-    // B's dev spawn gets pid 2000 from makeSpawnStub
-    assert.equal(s.active.pid, 2000, 'pid should be from B dev spawn');
+    const logsA = runner.getLogs('C:\\fake\\logA');
+    const logsB = runner.getLogs('C:\\fake\\logB');
+    assert.ok(logsA.includes('only-in-A'));
+    assert.ok(!logsA.includes('only-in-B'), 'A logs must not contain B output');
+    assert.ok(logsB.includes('only-in-B'));
+    assert.ok(!logsB.includes('only-in-A'), 'B logs must not contain A output');
   });
+});
 
-  it('calls stopServer before spawning when switching worktrees', async () => {
-    // Start server A so active is set.
+// ---------------------------------------------------------------------------
+// Multiple concurrent servers
+// ---------------------------------------------------------------------------
+
+describe('concurrent servers', () => {
+  it('keeps two servers active at the same time', async () => {
     const refsA = {};
     runner._setSpawnFn(makeSpawnStub(refsA));
-    await runner.startServer('C:\\fake\\SeqA', { project: 'p', branch: 'seq-a' });
-    assert.notEqual(runner.getStatus().active, null, 'A should be active');
-
-    // Instrument: record stop vs spawn order using the kill seam.
-    const order = [];
-    runner._setKillFn(async () => { order.push('stop'); });
-    runner._setDockerDownFn(async () => {});
+    await runner.startServer('C:\\fake\\A', { project: 'p', branch: 'a' }, { PORT: '3100' });
 
     const refsB = {};
-    let spawnCallInOrder = 0;
-    runner._setSpawnFn(() => {
-      spawnCallInOrder += 1;
-      if (spawnCallInOrder === 1) {
-        // install child — auto-close so runNpmInstall resolves
-        return makeChild(100, true);
-      }
-      order.push('spawn');
-      refsB.dev = makeChild(200, false);
-      return refsB.dev;
-    });
+    runner._setSpawnFn(makeSpawnStub(refsB));
+    await runner.startServer('C:\\fake\\B', { project: 'p', branch: 'b' }, { PORT: '3101' });
 
-    await runner.startServer('C:\\fake\\SeqB', { project: 'p', branch: 'seq-b' });
-
-    assert.deepEqual(order, ['stop', 'spawn'], 'stop must happen before spawn');
-    assert.equal(runner.getStatus().active?.branch, 'seq-b');
+    const all = runner.getAllStatuses();
+    assert.equal(all.length, 2, 'both servers should be active');
+    const byPath = new Map(all.map((s) => [s.path, s]));
+    assert.equal(byPath.get('C:\\fake\\A').branch, 'a');
+    assert.equal(byPath.get('C:\\fake\\B').branch, 'b');
+    assert.equal(byPath.get('C:\\fake\\A').port, '3100');
+    assert.equal(byPath.get('C:\\fake\\B').port, '3101');
   });
 
-  it('ignores a second concurrent startServer call while first is in progress', async () => {
-    // Use a manually-controlled install to keep first call in-flight.
+  it('stopping one server leaves the other running', async () => {
+    const refsA = {};
+    runner._setSpawnFn(makeSpawnStub(refsA));
+    await runner.startServer('C:\\fake\\KeepA', { project: 'p', branch: 'a' }, { PORT: '3100' });
+
+    const refsB = {};
+    runner._setSpawnFn(makeSpawnStub(refsB));
+    await runner.startServer('C:\\fake\\KeepB', { project: 'p', branch: 'b' }, { PORT: '3101' });
+
+    await runner.stopServer('C:\\fake\\KeepA');
+
+    assert.equal(runner.getStatus('C:\\fake\\KeepA').active, null, 'A stopped');
+    assert.notEqual(runner.getStatus('C:\\fake\\KeepB').active, null, 'B still running');
+    assert.equal(runner.getAllStatuses().length, 1);
+  });
+
+  it('ignores a second concurrent startServer on the same path', async () => {
     let installChild;
     let spawnCall = 0;
     runner._setSpawnFn((_cmd, _args, _opts) => {
@@ -239,51 +243,56 @@ describe('startServer auto-stop sequencing', () => {
     });
 
     const fakePath = 'C:\\fake\\Dup';
-    // Fire two concurrent starts — second hits the inProgress guard.
-    const p1 = runner.startServer(fakePath, { project: 'p', branch: 'x' });
-    const p2 = runner.startServer(fakePath, { project: 'p', branch: 'x' });
+    const p1 = runner.startServer(fakePath, { project: 'p', branch: 'x' }, {});
+    const p2 = runner.startServer(fakePath, { project: 'p', branch: 'x' }, {});
 
-    // p2 resolves immediately with idle status (inProgress guard early-return).
     const r2 = await p2;
     assert.equal(r2.active, null, 'second call returns idle while first is in flight');
 
-    // Finish p1.
     installChild?.emit('close');
     await p1;
 
-    assert.notEqual(runner.getStatus().active, null, 'first start should succeed');
-    // Only 2 spawns: install + dev (p2 was rejected before any spawn)
+    assert.notEqual(runner.getStatus(fakePath).active, null, 'first start should succeed');
     assert.equal(spawnCall, 2, `expected 2 spawn calls, got ${spawnCall}`);
   });
 });
 
 // ---------------------------------------------------------------------------
-// stopServer — idempotency and error swallowing
+// stopServer / stopAll
 // ---------------------------------------------------------------------------
 
 describe('stopServer', () => {
-  it('is idempotent when no server is active — does not throw', async () => {
-    // beforeEach already called stopServer, so active is null here.
-    assert.equal(runner.getStatus().active, null);
-    // Calling again must not throw.
-    await assert.doesNotReject(() => runner.stopServer());
-    await assert.doesNotReject(() => runner.stopServer());
+  it('is idempotent for an unknown path — does not throw', async () => {
+    await assert.doesNotReject(() => runner.stopServer('C:\\fake\\never'));
   });
 
-  it('swallows a rejected dockerComposeDown and still resolves with active=null', async () => {
-    // Start a server so active is set.
+  it('swallows a rejected dockerComposeDown and still clears the entry', async () => {
     const refs = {};
     runner._setSpawnFn(makeSpawnStub(refs));
-    await runner.startServer('C:\\fake\\DockerErr', { project: 'p', branch: 'main' });
-    assert.notEqual(runner.getStatus().active, null);
+    const p = 'C:\\fake\\DockerErr';
+    await runner.startServer(p, { project: 'p', branch: 'main' }, {});
+    assert.notEqual(runner.getStatus(p).active, null);
 
-    // Make dockerDown reject (simulates Docker Desktop not running).
     runner._setDockerDownFn(async () => { throw new Error('docker not available'); });
     runner._setKillFn(async () => {});
 
-    // stopServer must resolve without throwing even though docker down errored.
-    await assert.doesNotReject(() => runner.stopServer());
-    assert.equal(runner.getStatus().active, null, 'active must be null after stop');
+    await assert.doesNotReject(() => runner.stopServer(p));
+    assert.equal(runner.getStatus(p).active, null, 'active must be null after stop');
+  });
+});
+
+describe('stopAll', () => {
+  it('stops every running server', async () => {
+    const refsA = {};
+    runner._setSpawnFn(makeSpawnStub(refsA));
+    await runner.startServer('C:\\fake\\AllA', { project: 'p', branch: 'a' }, { PORT: '3100' });
+    const refsB = {};
+    runner._setSpawnFn(makeSpawnStub(refsB));
+    await runner.startServer('C:\\fake\\AllB', { project: 'p', branch: 'b' }, { PORT: '3101' });
+
+    assert.equal(runner.getAllStatuses().length, 2);
+    await runner.stopAll();
+    assert.equal(runner.getAllStatuses().length, 0, 'all servers stopped');
   });
 });
 
@@ -293,7 +302,6 @@ describe('stopServer', () => {
 
 describe('spawn error handling', () => {
   it('startServer does not reject when dev server emits error', async () => {
-    // install child auto-closes; dev child will emit 'error'
     let spawnCall = 0;
     let devChild;
     runner._setSpawnFn((_cmd, _args, _opts) => {
@@ -303,12 +311,10 @@ describe('spawn error handling', () => {
       return devChild;
     });
 
-    const startP = runner.startServer('C:\\fake\\ErrPath', { project: 'p', branch: 'err-branch' });
+    const startP = runner.startServer('C:\\fake\\ErrPath', { project: 'p', branch: 'err-branch' }, {});
     await assert.doesNotReject(() => startP);
 
-    // Emit error after startServer resolves (async, as Node would do it).
     devChild?.emit('error', new Error('ENOENT spawn failed'));
-    // Yield microtasks so the error handler runs.
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -323,17 +329,18 @@ describe('spawn error handling', () => {
       return devChild;
     });
 
-    await runner.startServer('C:\\fake\\ErrLogs', { project: 'p', branch: 'log-branch' });
+    const p = 'C:\\fake\\ErrLogs';
+    await runner.startServer(p, { project: 'p', branch: 'log-branch' }, {});
     devChild?.emit('error', new Error('ENOENT spawn failed'));
     await Promise.resolve();
     await Promise.resolve();
 
-    const captured = runner.getLogs();
+    const captured = runner.getLogs(p);
     const errorLine = captured.find((l) => l.includes('failed to start'));
     assert.ok(errorLine, `expected an error log line, got: ${JSON.stringify(captured)}`);
   });
 
-  it('resets active to null after dev server emits error', async () => {
+  it('resets the entry to null after dev server emits error', async () => {
     let spawnCall = 0;
     let devChild;
     runner._setSpawnFn((_cmd, _args, _opts) => {
@@ -343,21 +350,20 @@ describe('spawn error handling', () => {
       return devChild;
     });
 
-    await runner.startServer('C:\\fake\\ErrIdle', { project: 'p', branch: 'idle-branch' });
-    assert.notEqual(runner.getStatus().active, null, 'should be active before error');
+    const p = 'C:\\fake\\ErrIdle';
+    await runner.startServer(p, { project: 'p', branch: 'idle-branch' }, {});
+    assert.notEqual(runner.getStatus(p).active, null, 'should be active before error');
 
     devChild?.emit('error', new Error('ENOENT spawn failed'));
     await Promise.resolve();
     await Promise.resolve();
 
-    const s = runner.getStatus();
+    const s = runner.getStatus(p);
     assert.equal(s.active, null, 'active must be null after spawn error');
     assert.equal(s.installing, false, 'installing must be false after spawn error');
   });
 
   it('does not hang and logs the error when the install spawn emits error', async () => {
-    // First spawn (npm install) emits 'error' instead of closing; the dev
-    // spawn then also errors so we end fully idle.
     let installChild;
     let devChild;
     let spawnCall = 0;
@@ -365,7 +371,6 @@ describe('spawn error handling', () => {
       spawnCall += 1;
       if (spawnCall === 1) {
         installChild = makeChild(100, /* autoClose */ false);
-        // Resolve runNpmInstall via 'error' (not 'close') so startServer proceeds.
         Promise.resolve().then(() =>
           installChild.emit('error', new Error('ENOENT npm install failed')),
         );
@@ -375,21 +380,20 @@ describe('spawn error handling', () => {
       return devChild;
     });
 
-    // startServer must resolve (install 'error' resolves the promise — no hang).
+    const p = 'C:\\fake\\InstallErr';
     await assert.doesNotReject(() =>
-      runner.startServer('C:\\fake\\InstallErr', { project: 'p', branch: 'inst-branch' }),
+      runner.startServer(p, { project: 'p', branch: 'inst-branch' }, {}),
     );
 
-    const captured = runner.getLogs();
+    const captured = runner.getLogs(p);
     const errorLine = captured.find((l) => l.includes('npm install error'));
     assert.ok(errorLine, `expected install error log, got: ${JSON.stringify(captured)}`);
-    assert.equal(runner.getStatus().installing, false, 'installing must be false after install error');
+    assert.equal(runner.getStatus(p).installing, false, 'installing must be false after install error');
 
-    // Dev child then errors → state fully resets to idle.
     devChild?.emit('error', new Error('ENOENT spawn failed'));
     await Promise.resolve();
     await Promise.resolve();
-    assert.equal(runner.getStatus().active, null, 'active must be null after errors');
+    assert.equal(runner.getStatus(p).active, null, 'active must be null after errors');
   });
 });
 
@@ -410,12 +414,12 @@ describe('docker preflight', () => {
       });
       runner._setDockerRunningFn(async () => false);
 
-      const status = await runner.startServer(tmpDir, { project: 'p', branch: 'docker-down' });
+      const status = await runner.startServer(tmpDir, { project: 'p', branch: 'docker-down' }, {});
 
       assert.equal(spawnCallCount, 0, 'spawn must not be called when Docker is not running');
       assert.equal(status.active, null, 'active must remain null');
 
-      const captured = runner.getLogs();
+      const captured = runner.getLogs(tmpDir);
       const msg = '[local-pm] Docker is not running — start Docker Desktop first, then try again.';
       assert.ok(
         captured.includes(msg),
@@ -435,9 +439,9 @@ describe('docker preflight', () => {
       runner._setSpawnFn(makeSpawnStub(refs));
       runner._setDockerRunningFn(async () => true);
 
-      await runner.startServer(tmpDir, { project: 'p', branch: 'docker-up' });
+      await runner.startServer(tmpDir, { project: 'p', branch: 'docker-up' }, {});
 
-      assert.notEqual(runner.getStatus().active, null, 'active must be set when Docker is running');
+      assert.notEqual(runner.getStatus(tmpDir).active, null, 'active must be set when Docker is running');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -446,14 +450,13 @@ describe('docker preflight', () => {
   it('skips the Docker check entirely when no compose file is present', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-pm-test-'));
     try {
-      // No compose file written — Docker check must be bypassed.
       const refs = {};
       runner._setSpawnFn(makeSpawnStub(refs));
       runner._setDockerRunningFn(async () => false);
 
-      await runner.startServer(tmpDir, { project: 'p', branch: 'no-compose' });
+      await runner.startServer(tmpDir, { project: 'p', branch: 'no-compose' }, {});
 
-      assert.notEqual(runner.getStatus().active, null, 'active must be set even though Docker returns false — no compose file');
+      assert.notEqual(runner.getStatus(tmpDir).active, null, 'active must be set even though Docker returns false — no compose file');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

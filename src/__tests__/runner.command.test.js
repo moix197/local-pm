@@ -1,8 +1,5 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import os from 'node:os';
-import fs from 'node:fs';
-import path from 'node:path';
 import * as runner from '../runner.js';
 
 // ---------------------------------------------------------------------------
@@ -38,7 +35,7 @@ function stubAll() {
 
 beforeEach(async () => {
   stubAll();
-  await runner.stopServer();
+  await runner.stopAll();
   // Clear any lingering command from a prior test by stopping it if running.
   runner.stopCommand();
 });
@@ -56,7 +53,7 @@ describe('runCommand happy path', () => {
     assert.equal(s.command.status, 'done');
     assert.equal(s.command.exitCode, 0);
 
-    const logs = runner.getLogs();
+    const logs = runner.getLogs('C:\\fake\\wt');
     assert.ok(logs.includes('[cmd] npm install'), 'header logged');
     assert.ok(logs.includes('[cmd] exited 0'), 'footer logged');
   });
@@ -71,7 +68,7 @@ describe('runCommand non-zero exit', () => {
     const s = runner.getStatus();
     assert.equal(s.command.status, 'failed');
     assert.equal(s.command.exitCode, 1);
-    assert.ok(runner.getLogs().includes('[cmd] exited 1'));
+    assert.ok(runner.getLogs('C:\\fake\\wt').includes('[cmd] exited 1'));
   });
 });
 
@@ -83,7 +80,7 @@ describe('runCommand spawn error', () => {
     child.emit('error', new Error('ENOENT'));
     const s = runner.getStatus();
     assert.equal(s.command.status, 'failed');
-    assert.ok(runner.getLogs().some((l) => l.includes('[cmd] error: ENOENT')));
+    assert.ok(runner.getLogs('C:\\fake\\wt').some((l) => l.includes('[cmd] error: ENOENT')));
     // inProgress cleared ⇒ a subsequent command can spawn
     let spawned = false;
     runner._setSpawnFn(() => { spawned = true; return makeChild(3); });
@@ -162,23 +159,13 @@ describe('stopCommand stays authoritative on a late close event', () => {
   });
 });
 
-describe('startServer clears a stale terminal command', () => {
-  it('nulls a finished command so it cannot mask the server banner', async () => {
+describe('runCommand routes output to the target path log buffer', () => {
+  it('writes the command header into that path\'s own logs', async () => {
     let child;
     runner._setSpawnFn(() => (child = makeChild(4321)));
-    await runner.runCommand('C:\\fake\\wt', { cmd: 'build', label: 'build' });
+    const p = 'C:\\fake\\cmdLogs';
+    await runner.runCommand(p, { cmd: 'build', label: 'build' });
     child.emit('close', 0);
-    assert.equal(runner.getStatus().command.status, 'done', 'precondition: done');
-
-    // Temp dir with node_modules so startServer skips install and spawns dev.
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'local-pm-cmd-'));
-    fs.mkdirSync(path.join(tmpDir, 'node_modules'));
-    try {
-      runner._setSpawnFn(() => makeChild(5432));
-      await runner.startServer(tmpDir, { project: 'p', branch: 'b' });
-      assert.equal(runner.getStatus().command, null, 'stale command cleared');
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    assert.ok(runner.getLogs(p).includes('[cmd] build'), 'command header in path logs');
   });
 });

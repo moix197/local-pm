@@ -1,7 +1,8 @@
 # local-pm
 
-Lightweight local web dashboard to control a dev server per git worktree, one at a
-time, accessible over the LAN. No web framework, only Node built-ins. Frontend is a
+Lightweight local web dashboard to control a dev server per git worktree,
+accessible over the LAN. Multiple servers run **concurrently**, each on its own
+port with its own log console. No web framework, only Node built-ins. Frontend is a
 single static HTML page with vanilla JS — no build step.
 
 ## Works with git-wt
@@ -17,18 +18,28 @@ a worktree, then use local-pm to start/stop/switch its server from the browser.
 Automates, per worktree, what you'd otherwise do by hand:
 
 1. Discovers git worktrees for each configured project (`git worktree list`).
-2. **Start**: runs `npm install` first if `node_modules` is missing, then `npm run dev`
-   in the worktree folder.
-3. **Stop**: kills the dev server process tree (`taskkill /T /F`) and runs
+2. **Start**: assigns a free port from the local pool (3100–3199), runs `npm install`
+   first if `node_modules` is missing, then `npm run dev` in the worktree folder with
+   that `PORT` injected into the environment.
+3. **Run many at once**: each started worktree runs independently and concurrently —
+   starting a second server no longer stops the first. Every running server appears in
+   the **Running servers** section with its assigned port, an **Open** link, an
+   **Open console** button (its own logs), and a per-server **Stop**.
+4. **Stop**: kills the dev server process tree (`taskkill /T /F`), runs
    `docker compose down` in the worktree (errors ignored — fine for worktrees with no
-   compose file).
-4. Switching worktrees stops the current server before starting the new one.
+   compose file), and frees the server's port back to the pool. A per-server **Stop**
+   stops only that one; **Stop all** stops every running server.
 5. **Docker pre-flight**: if the worktree has a compose file (`docker-compose.yml` etc.)
-   and Docker Desktop isn't running, startup is aborted with a clear
+   and Docker Desktop isn't running, that start is aborted with a clear
    `Docker is not running — start Docker Desktop first, then try again.` log message
-   instead of a raw error, and the currently-running server is left untouched.
+   instead of a raw error, and any other running servers are left untouched.
 
-Logs (last ~300 combined stdout/stderr lines) stream into the page.
+Each server keeps its own log buffer (last ~300 combined stdout/stderr lines).
+Consoles are **lazy**: a server's logs are fetched (via `GET /api/logs?path=…`) only
+while its console panel is open, so idle servers cost nothing.
+
+> The lazy log-fetch design is intentionally forward-compatible with the planned
+> interactive-terminal upgrade (PRD 2: node-pty + WebSocket + xterm.js).
 
 ## Requirements
 
@@ -80,22 +91,44 @@ reads the token, writes it to `localStorage`, and strips the fragment from the U
 **curl:** pass the token as a bearer header.
 
 ```sh
-# state
+# state — { worktrees, running:[…], lanUrl, serverPort } (no logs field)
 curl -H "Authorization: Bearer <token>" http://localhost:7420/api/state
-# start a worktree's dev server
+# start a worktree's dev server (a free pool port is assigned and injected as PORT)
 curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"path":"C:/path/to/worktree"}' http://localhost:7420/api/start
-# stop the active dev server
+# fetch one server's own logs
+curl -H "Authorization: Bearer <token>" \
+  "http://localhost:7420/api/logs?path=C:/path/to/worktree"
+# stop ONE server (pass its path)
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"path":"C:/path/to/worktree"}' http://localhost:7420/api/stop
+# stop ALL running servers (omit the body)
 curl -X POST -H "Authorization: Bearer <token>" http://localhost:7420/api/stop
 ```
+
+### API routes
+
+| Method | Route | Body / query | Returns |
+|---|---|---|---|
+| GET | `/api/state` | — | `{ worktrees, running, lanUrl, serverPort }` |
+| GET | `/api/logs` | `?path=<worktree>` | `{ logs: string[] }` for that server |
+| POST | `/api/start` | `{ path }` | status for that path (pool port assigned) |
+| POST | `/api/stop` | `{ path }` (optional) | with `path`: stop that server; without: stop all |
+| POST | `/api/command` | `{ path, cmd, label }` | runs a command in that worktree |
+| POST | `/api/command/stop` | — | stops the running command |
+
+If the port pool (3100–3199) is fully allocated, `/api/start` returns `503` with a
+descriptive error. Port allocation is **in-process only** — it tracks ports local-pm
+itself assigned and does not probe the OS for ports held by unrelated processes
+(acceptable for a single-instance LAN tool).
 
 Without a valid token these endpoints return `401 {"error":"Unauthorized"}`.
 
 ## Running commands in a worktree
 
-On a **stopped** worktree each row shows command controls — only available when no server
-is running for that worktree (a running server returns 409 and the UI disables the
-controls).
+On a **stopped** worktree each row shows command controls. (A worktree whose server is
+running is controlled from the **Running servers** section instead; per-target command
+controls in each running row arrive in a later phase.)
 
 ### Quick-action buttons
 
@@ -146,18 +179,19 @@ quick-action.
 
 ### Command output and the shared log buffer
 
-Output streams into the existing logs panel (last ~300 combined lines). The header line
-is `[cmd] <label>`, followed by stdout/stderr, then a footer `[cmd] exited <code>`. A
-green `✓ (exit 0)` or red `✗ (exit N)` banner shows the result at the top of the page.
+Output streams into that worktree's own log buffer (last ~300 combined lines), viewable
+via its **Open console** button. The header line is `[cmd] <label>`, followed by
+stdout/stderr, then a footer `[cmd] exited <code>`.
 
-The 300-line buffer is shared between server logs and command output — a noisy command
-will churn it and push out earlier server logs. Accepted trade-off for the LAN tool.
+Each worktree path has its own 300-line buffer — a noisy command only churns that
+path's logs, never another server's.
 
 ### Stop command
 
-While a command is running a **Stop command** button appears in the banner. Clicking it
-kills the command process tree (`taskkill /T /F` on Windows) and marks the command
-failed. Controls re-enable after the command exits or is stopped.
+A running command can be stopped via `POST /api/command/stop`, which kills the command
+process tree (`taskkill /T /F` on Windows) and marks the command failed. (A per-server
+**Stop command** button in each running row arrives with per-target commands in a later
+phase.)
 
 ### Known limitation — interactive commands
 
@@ -252,13 +286,14 @@ contains invalid JSON, startup fails with a descriptive error
 
 ## Limitations & assumptions
 
-- **One server at a time.** Parallel servers are future roadmap.
+- **Multiple servers run concurrently**, each on a distinct pool port (3100–3199).
+  Port allocation is in-process; a second local-pm instance on the same machine would
+  collide.
 - **Dev mode only.**
-- Dev servers are assumed to serve on **port 3000** (the LAN link uses `:3000`).
+- Each server's dev `PORT` is injected from the pool; the worktree's dev script must
+  honour `PORT`. The header LAN link points at the dev base URL.
 - `docker compose down` is run on stop; its errors are ignored so worktrees without a
   compose file still stop cleanly.
 - Windows-specific: uses `npm.cmd`, `taskkill`, and `shell: true` for `.cmd` resolution.
-- **Commands block the server.** The single-operation guard means you cannot start a
-  server while a command is running, and vice versa.
 - **No interactive stdin.** Commands waiting on user input hang until stopped manually
   (see [Stop command](#stop-command) above).

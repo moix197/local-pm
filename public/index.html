@@ -58,6 +58,9 @@
       .row .branch { font-weight: 600; min-width: 160px; }
       .row .path { color: var(--muted); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .running { color: var(--green); font-size: 12px; white-space: nowrap; }
+      .running-section h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; display: flex; align-items: center; gap: 12px; }
+      .row .port { color: var(--green); font-size: 12px; white-space: nowrap; }
+      .console { margin: 0 0 6px; }
       button {
         font: inherit;
         padding: 5px 14px;
@@ -174,12 +177,8 @@
       <a id="forgetLink" href="#" style="font-size:13px;color:var(--muted)">forget token</a>
     </header>
     <main>
-      <div id="banner" class="banner hidden"></div>
+      <div id="running" class="running-section"></div>
       <div id="projects"></div>
-      <div class="logs">
-        <h2>Logs</h2>
-        <pre id="logs"></pre>
-      </div>
     </main>
     <script type="module">
       let inFlight = false;
@@ -298,32 +297,102 @@
         return map;
       }
 
-      function renderBanner(status) {
-        const banner = document.getElementById('banner');
-        const c = status.command;
-        if (c) {
-          banner.classList.remove('hidden');
-          if (c.status === 'running') {
-            banner.innerHTML = `Running command: ${c.label}… ` +
-              `<button class="stop" id="stopCmdBtn">Stop command</button>`;
-            banner.querySelector('#stopCmdBtn').onclick = () => post('/api/command/stop');
-            return;
-          }
-          const ok = c.exitCode === 0;
-          banner.innerHTML =
-            `<span style="color:var(--${ok ? 'green' : 'red'})">` +
-            `${ok ? '✓' : '✗'} ${c.label} (exit ${c.exitCode})</span>`;
-          return;
+      // Set of worktree paths whose console panel is currently open. Logs are
+      // fetched lazily — only while a panel is open — so idle servers cost nothing.
+      const openConsoles = new Set();
+      let consoleInterval = null;
+
+      function runningPaths(state) {
+        return new Set((state.running ?? []).map((r) => r.path));
+      }
+
+      function lanUrlForPort(state, port) {
+        if (port == null) return state.lanUrl;
+        return state.lanUrl.replace(/:\d+$/, ':' + port);
+      }
+
+      async function refreshConsole(path) {
+        const pre = document.querySelector(`pre[data-console="${CSS.escape(path)}"]`);
+        if (!pre) return;
+        // PRD 2: replace poll with WebSocket stream (node-pty+xterm.js) — out of scope here
+        const res = await fetch('/api/logs?path=' + encodeURIComponent(path), { headers: authHeaders() });
+        if (res.status === 401) return renderAuthError();
+        const body = await res.json();
+        const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+        pre.textContent = (body.logs ?? []).join('\n');
+        if (atBottom) pre.scrollTop = pre.scrollHeight;
+      }
+
+      function pollConsoles() {
+        for (const path of openConsoles) refreshConsole(path);
+      }
+
+      function ensureConsolePolling() {
+        if (consoleInterval || openConsoles.size === 0) return;
+        consoleInterval = setInterval(pollConsoles, 2000);
+      }
+
+      function stopConsolePolling() {
+        if (openConsoles.size === 0 && consoleInterval) {
+          clearInterval(consoleInterval);
+          consoleInterval = null;
         }
-        if (status.installing) {
-          banner.textContent = 'Installing dependencies…';
-          banner.classList.remove('hidden');
-        } else if (status.active) {
-          const a = status.active;
-          banner.textContent = `Running: ${a.branch ?? a.path} (pid ${a.pid})`;
-          banner.classList.remove('hidden');
-        } else {
-          banner.classList.add('hidden');
+      }
+
+      function toggleConsole(path) {
+        if (openConsoles.has(path)) openConsoles.delete(path);
+        else openConsoles.add(path);
+        stopConsolePolling();
+        render(lastState);
+        ensureConsolePolling();
+        if (openConsoles.has(path)) refreshConsole(path);
+      }
+
+      function makeRunningRow(state, srv) {
+        const row = document.createElement('div');
+        row.className = 'row active';
+        const url = lanUrlForPort(state, srv.port);
+        row.innerHTML =
+          `<span class="branch">${srv.branch ?? srv.path}</span>` +
+          `<span class="port">● ${srv.port != null ? 'port ' + srv.port : 'running'}</span>` +
+          `<span class="path" title="${srv.path}">${srv.path}</span>`;
+        const open = makeOpenLink(url);
+        row.appendChild(open);
+        const consoleBtn = document.createElement('button');
+        consoleBtn.textContent = openConsoles.has(srv.path) ? 'Hide console' : 'Open console';
+        consoleBtn.onclick = () => toggleConsole(srv.path);
+        row.appendChild(consoleBtn);
+        const stop = document.createElement('button');
+        stop.className = 'stop';
+        stop.textContent = 'Stop';
+        stop.onclick = () => post('/api/stop', { path: srv.path });
+        row.appendChild(stop);
+        return row;
+      }
+
+      function makeConsolePanel(path) {
+        const pre = document.createElement('pre');
+        pre.className = 'console';
+        pre.dataset.console = path;
+        return pre;
+      }
+
+      function renderRunning(state) {
+        const container = document.getElementById('running');
+        container.innerHTML = '';
+        const running = state.running ?? [];
+        if (running.length === 0) return;
+        const h2 = document.createElement('h2');
+        h2.textContent = 'Running servers';
+        const stopAllBtn = document.createElement('button');
+        stopAllBtn.className = 'stop';
+        stopAllBtn.textContent = 'Stop all';
+        stopAllBtn.onclick = () => post('/api/stop');
+        h2.appendChild(stopAllBtn);
+        container.appendChild(h2);
+        for (const srv of running) {
+          container.appendChild(makeRunningRow(state, srv));
+          if (openConsoles.has(srv.path)) container.appendChild(makeConsolePanel(srv.path));
         }
       }
 
@@ -370,30 +439,26 @@
         return link;
       }
 
-      function makeRow(w, status, busy, lanUrl) {
-        const isActive = status.active && status.active.path === w.path;
-        const cmdRunning = status.command && status.command.status === 'running';
-        const controlsBusy = busy || cmdRunning;
+      function makeRow(w, running, busy) {
+        const isRunning = running.has(w.path);
         const row = document.createElement('div');
-        row.className = 'row' + (isActive ? ' active' : '');
+        row.className = 'row' + (isRunning ? ' active' : '');
         row.innerHTML =
           `<span class="branch">${w.branch}</span>` +
           `<span class="path" title="${w.path}">${w.path}</span>`;
-        const btn = document.createElement('button');
-        if (isActive) {
+        // A running server is controlled from the "Running servers" section above;
+        // this row just shows its state. Stopped rows get Start + command controls.
+        if (isRunning) {
           row.insertAdjacentHTML('beforeend', '<span class="running">● running</span>');
-          row.appendChild(makeOpenLink(lanUrl));
-          btn.className = 'stop';
-          btn.textContent = 'Stop';
-          btn.onclick = () => post('/api/stop');
-        } else {
-          btn.className = 'start';
-          btn.textContent = 'Start';
-          btn.onclick = () => post('/api/start', { path: w.path });
-          for (const c of w.commands ?? []) row.appendChild(makeCommandButton(w, c, controlsBusy));
-          row.appendChild(makeFreeFormInput(w, controlsBusy));
+          return row;
         }
-        btn.disabled = controlsBusy;
+        for (const c of w.commands ?? []) row.appendChild(makeCommandButton(w, c, busy));
+        row.appendChild(makeFreeFormInput(w, busy));
+        const btn = document.createElement('button');
+        btn.className = 'start';
+        btn.textContent = 'Start';
+        btn.onclick = () => post('/api/start', { path: w.path });
+        btn.disabled = busy;
         row.appendChild(btn);
         return row;
       }
@@ -422,6 +487,7 @@
       function renderProjects(state, busy) {
         const container = document.getElementById('projects');
         const focused = captureFocusedFreeForm(container);
+        const running = runningPaths(state);
         container.innerHTML = '';
         for (const [project, worktrees] of groupByProject(state.worktrees)) {
           const section = document.createElement('div');
@@ -429,28 +495,20 @@
           const h2 = document.createElement('h2');
           h2.textContent = project;
           section.appendChild(h2);
-          for (const w of worktrees) section.appendChild(makeRow(w, state.status, busy, state.lanUrl));
+          for (const w of worktrees) section.appendChild(makeRow(w, running, busy));
           container.appendChild(section);
         }
         restoreFocusedFreeForm(container, focused);
       }
 
-      function renderLogs(logs) {
-        const pre = document.getElementById('logs');
-        const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
-        pre.textContent = logs.join('\n');
-        if (atBottom) pre.scrollTop = pre.scrollHeight;
-      }
-
       function render(state, busy = inFlight) {
         if (!state) return;
-        document.getElementById('lanUrl').innerHTML =
-          state.status.active
-            ? `<a href="${state.lanUrl}" target="_blank">${state.lanUrl}</a>`
-            : `<span style="color:var(--muted)">dev url: ${state.lanUrl}</span>`;
-        renderBanner(state.status);
+        const anyRunning = (state.running ?? []).length > 0;
+        document.getElementById('lanUrl').innerHTML = anyRunning
+          ? `<a href="${state.lanUrl}" target="_blank">${state.lanUrl}</a>`
+          : `<span style="color:var(--muted)">dev url: ${state.lanUrl}</span>`;
+        renderRunning(state);
         renderProjects(state, busy);
-        renderLogs(state.logs);
       }
 
       let lastState = null;
