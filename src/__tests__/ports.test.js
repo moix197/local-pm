@@ -193,13 +193,15 @@ describe('readGitWtOffset', () => {
     assert.equal(result, null);
   });
 
-  it('returns null for a branch key not present in the file', () => {
+  it('returns offset 0 for a branch absent from allocations (e.g. main/develop not yet allocated)', () => {
     const tmpDir = makeFakeProjectRoot(
       fs.readFileSync(path.join(FIXTURES, 'git-wt-ports.json'), 'utf8'),
     );
     tmpDirs.push(tmpDir);
-    const result = readGitWtOffset(tmpDir, 'nonexistent-branch');
-    assert.equal(result, null);
+    // 'develop' is not in the fixture allocations — absent branch = base branch = offset 0
+    const result = readGitWtOffset(tmpDir, 'develop');
+    assert.ok(result !== null, 'should return non-null when file is valid');
+    assert.equal(result.offset, 0, 'absent branch defaults to offset 0');
   });
 
   it('returns null (not throws) for malformed JSON', () => {
@@ -236,6 +238,26 @@ describe('scanComposePortVars', () => {
     tmpDirs.push(tmpDir);
     const vars = scanComposePortVars(tmpDir);
     assert.deepEqual(vars, []);
+  });
+
+  it('correctly parses ${VAR:-default} and ${VAR-default} syntax', () => {
+    const content = [
+      'version: "3"',
+      'services:',
+      '  app:',
+      '    image: node:22',
+      '    ports:',
+      '      - "${APP_PORT:-3000}:3000"',
+      '      - "${WS_PORT-3001}:3001"',
+    ].join('\n');
+    const tmpDir = makeFakeProjectWithCompose(content);
+    tmpDirs.push(tmpDir);
+    const vars = scanComposePortVars(tmpDir);
+    const byName = Object.fromEntries(vars.map((v) => [v.varName, v]));
+    assert.ok(byName.APP_PORT, 'APP_PORT extracted from ${APP_PORT:-3000}');
+    assert.equal(byName.APP_PORT.varName, 'APP_PORT', 'varName must not include :-default part');
+    assert.ok(byName.WS_PORT, 'WS_PORT extracted from ${WS_PORT-3001}');
+    assert.equal(byName.WS_PORT.varName, 'WS_PORT', 'varName must not include -default part');
   });
 });
 
@@ -348,14 +370,34 @@ describe('buildEnvForTarget', () => {
     releasePort(tmpDir);
   });
 
-  it('git-wt type falls back to assignPort when readGitWtOffset returns null', () => {
-    // No .git dir => offset is null => falls back to plain PORT
+  it('git-wt type with absent ports file uses offset 0 → PORT=basePort (never pool)', () => {
+    // No .git dir => readGitWtOffset returns null => offset defaults to 0 => PORT=3000
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
     tmpDirs.push(tmpDir);
-    const env = buildEnvForTarget({ project: 'p', branch: 'main', path: tmpDir, type: 'git-wt' });
-    assignedInTest.add(tmpDir);
-    assert.ok(env.PORT, 'should fall back to PORT from pool');
-    const port = Number(env.PORT);
-    assert.ok(port >= POOL_START && port <= POOL_END, 'fallback PORT in pool range');
+    const env = buildEnvForTarget({ project: 'p', branch: 'develop', path: tmpDir, type: 'git-wt' });
+    assert.equal(env.PORT, '3000', 'missing ports file → offset 0 → PORT=basePort=3000');
+    assert.equal(env.WS_PORT, '3000', 'WS_PORT also set to basePort');
+    // Must NOT be a pool port
+    assert.ok(Number(env.PORT) < POOL_START || Number(env.PORT) > POOL_END, 'not a pool port');
+  });
+
+  it('git-wt type with branch absent from allocations uses offset 0 → PORT=basePort', () => {
+    // .git dir exists with ports file, but branch "develop" is absent from allocations
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lpm-test-'));
+    tmpDirs.push(tmpDir);
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+    fs.writeFileSync(
+      path.join(tmpDir, '.git', 'git-wt-ports.json'),
+      JSON.stringify({
+        allocations: {
+          'feat/other': { branch: 'feat/other', offset: 5 },
+        },
+        nextOffset: 6,
+      }),
+    );
+    const env = buildEnvForTarget({ project: 'proj', branch: 'develop', path: tmpDir, type: 'git-wt' });
+    // develop absent from allocations → offset 0 → port = 3000 + 0*100 = 3000
+    assert.equal(env.PORT, '3000', 'absent branch → offset 0 → PORT=3000');
+    assert.equal(env.WS_PORT, '3000', 'WS_PORT also basePort');
   });
 });

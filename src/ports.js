@@ -165,10 +165,10 @@ export function readGitWtOffset(worktreePath, branch) {
     return null;
   }
   const alloc = parsed?.allocations?.[branch];
-  if (alloc == null) return null;
-  // offset 0 is valid (e.g. main/develop branch)
-  if (typeof alloc.offset !== 'number') return null;
-  return { offset: alloc.offset };
+  // Branch absent from allocations means offset 0 (e.g. main/develop — the base branch).
+  // Return null ONLY when the file is missing/unreadable or JSON is malformed (handled above).
+  const offset = typeof alloc?.offset === 'number' ? alloc.offset : 0;
+  return { offset };
 }
 
 /**
@@ -215,8 +215,9 @@ export function scanComposePortVars(projectRoot) {
       if (!inPorts) continue;
       if (!trimmed.startsWith('-')) continue;
 
-      // Line has a port entry — look for ${VARNAME} pattern.
-      const varMatch = trimmed.match(/\$\{([^}]+)\}/);
+      // Line has a port entry — look for ${VARNAME}, ${VARNAME:-default}, ${VARNAME-default}.
+      // Capture only the variable name (alphanumeric + underscore), stop at :, -, or }.
+      const varMatch = trimmed.match(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?:[:-][^}]*)?\}/);
       if (!varMatch) continue;
 
       const varName = varMatch[1];
@@ -287,23 +288,20 @@ export function buildEnvForTarget(worktree) {
 
   if (type === 'git-wt') {
     const offsetResult = readGitWtOffset(wtPath, branch);
-    if (offsetResult !== null) {
-      const { offset } = offsetResult;
-      const config = readGitWtConfig(wtPath);
-      const port = config.basePort + offset * config.increment;
-      const env = {};
-      for (const varName of config.envVars) {
-        env[varName] = String(port);
-      }
-      // Only set COMPOSE_PROJECT_NAME when compose files are present.
-      if (hasComposeFile(wtPath)) {
-        env.COMPOSE_PROJECT_NAME = slugify(`${project}-${branch}`);
-      }
-      return env;
+    // Never fall back to the pool for git-wt targets.
+    // If the ports file is missing/unreadable, offset defaults to 0 (basePort).
+    const offset = offsetResult?.offset ?? 0;
+    const config = readGitWtConfig(wtPath);
+    const port = config.basePort + offset * config.increment;
+    const env = {};
+    for (const varName of config.envVars) {
+      env[varName] = String(port);
     }
-    // Fall through to plain assignPort if offset not found.
-    const port = assignPort(wtPath);
-    return { PORT: String(port) };
+    // Only set COMPOSE_PROJECT_NAME when compose files are present.
+    if (hasComposeFile(wtPath)) {
+      env.COMPOSE_PROJECT_NAME = slugify(`${project}-${branch}`);
+    }
+    return env;
   }
 
   if (type === 'docker') {
