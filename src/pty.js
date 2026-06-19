@@ -84,20 +84,9 @@ export async function spawnSession({ worktreePath, kind, cols, rows }) {
   const id = crypto.randomUUID();
   const session = { id, ptyProcess, worktreePath: cwd, kind, scrollback: [], scrollbackBytes: 0, ws: null, idleAt: 0 };
   sessions.set(id, session);
-  return session;
-}
 
-export function attachClient(id, ws) {
-  const session = sessions.get(id);
-  if (!session) return;
-  // Replay scrollback
-  for (const chunk of session.scrollback) {
-    ws.send(chunk);
-  }
-  // Set active client
-  session.ws = ws;
-  // Wire live data: onData appends to scrollback ring AND sends if ws open + not over HIGH_WATER
-  session.ptyProcess.onData((data) => {
+  // Wire onData ONCE at spawn. Appends to scrollback ring always; sends live only when a client is attached.
+  ptyProcess.onData((data) => {
     // Append to scrollback ring (byte cap + chunk-count cap, evict from front)
     session.scrollback.push(data);
     session.scrollbackBytes += data.length;
@@ -109,11 +98,24 @@ export function attachClient(id, ws) {
       const evicted = session.scrollback.shift();
       session.scrollbackBytes -= evicted.length;
     }
-    // Live send with backpressure guard
+    // Live send with backpressure guard — reads session.ws dynamically so it follows attach/detach
     if (session.ws && session.ws.readyState === session.ws.constructor.OPEN && session.ws.bufferedAmount < HIGH_WATER) {
       session.ws.send(data);
     }
   });
+
+  return session;
+}
+
+export function attachClient(id, ws) {
+  const session = sessions.get(id);
+  if (!session) return;
+  // Replay existing scrollback to the new client in order
+  for (const chunk of session.scrollback) {
+    ws.send(chunk);
+  }
+  // Set active client — onData handler (wired at spawn) reads this dynamically
+  session.ws = ws;
 }
 
 export function detachClient(id) {

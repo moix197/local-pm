@@ -201,11 +201,12 @@ describe('detach/reattach/scrollback/reaper', () => {
   it('attachClient replays scrollback to new ws in order', async () => {
     setupFakes();
     const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    // onData is wired at spawn time — grab the single handler registered then
+    const fake = getSession(session.id).ptyProcess;
+    const handler = fake._calls.dataHandlers[0];
     // Attach first ws and produce some data
     const ws1 = makeFakeWs();
     attachClient(session.id, ws1);
-    const fake = getSession(session.id).ptyProcess;
-    const handler = fake._calls.dataHandlers[fake._calls.dataHandlers.length - 1];
     handler('chunk1');
     handler('chunk2');
     handler('chunk3');
@@ -222,6 +223,9 @@ describe('detach/reattach/scrollback/reaper', () => {
   it('live data after reattach goes to new ws only', async () => {
     setupFakes();
     const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    // onData is wired once at spawn — grab the single handler
+    const fake = getSession(session.id).ptyProcess;
+    const handler = fake._calls.dataHandlers[0];
     const ws1 = makeFakeWs();
     attachClient(session.id, ws1);
     detachClient(session.id);
@@ -230,8 +234,6 @@ describe('detach/reattach/scrollback/reaper', () => {
     // Clear ws2._sent (it has the replayed chunks from scrollback)
     ws2._sent.length = 0;
     // Now fire new data
-    const fake = getSession(session.id).ptyProcess;
-    const handler = fake._calls.dataHandlers[fake._calls.dataHandlers.length - 1];
     handler('live-chunk');
     assert.ok(ws2._sent.includes('live-chunk'), 'new ws received live chunk');
     // ws1 should NOT receive it (it's detached)
@@ -242,13 +244,14 @@ describe('detach/reattach/scrollback/reaper', () => {
   it('scrollback byte cap evicts oldest chunks', async () => {
     setupFakes();
     const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    // onData wired at spawn
+    const fake = getSession(session.id).ptyProcess;
+    const handler = fake._calls.dataHandlers[0];
     const ws = makeFakeWs();
     attachClient(session.id, ws);
     // Fill scrollback to just over 512000 bytes
     // Each chunk is 100000 bytes; 6 chunks = 600000 bytes > 512000
     const bigChunk = 'x'.repeat(100000);
-    const fake = getSession(session.id).ptyProcess;
-    const handler = fake._calls.dataHandlers[fake._calls.dataHandlers.length - 1];
     for (let i = 0; i < 6; i++) handler(bigChunk);
     const s = getSession(session.id);
     // Total bytes must be <= 512000; at most 5 full chunks
@@ -260,10 +263,11 @@ describe('detach/reattach/scrollback/reaper', () => {
   it('scrollback chunk-count cap evicts oldest chunks', async () => {
     setupFakes();
     const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    // onData wired at spawn
+    const fake = getSession(session.id).ptyProcess;
+    const handler = fake._calls.dataHandlers[0];
     const ws = makeFakeWs();
     attachClient(session.id, ws);
-    const fake = getSession(session.id).ptyProcess;
-    const handler = fake._calls.dataHandlers[fake._calls.dataHandlers.length - 1];
     // Push 5001 single-byte chunks to trigger chunk-count cap (5000)
     for (let i = 0; i < 5001; i++) handler('a');
     const s = getSession(session.id);
@@ -274,17 +278,61 @@ describe('detach/reattach/scrollback/reaper', () => {
   it('backpressure: skips live send when bufferedAmount >= HIGH_WATER, but still appends to scrollback', async () => {
     setupFakes();
     const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    // onData wired at spawn
+    const fake = getSession(session.id).ptyProcess;
+    const handler = fake._calls.dataHandlers[0];
     // ws with bufferedAmount at HIGH_WATER (1MB)
     const ws = makeFakeWs(1 << 20);
     attachClient(session.id, ws);
-    const fake = getSession(session.id).ptyProcess;
-    const handler = fake._calls.dataHandlers[fake._calls.dataHandlers.length - 1];
     handler('pressured-chunk');
     // send must NOT have been called
     assert.equal(ws._sent.length, 0, 'no live send over HIGH_WATER');
     // scrollback must still have the chunk
     const s = getSession(session.id);
     assert.ok(s.scrollback.includes('pressured-chunk'), 'chunk still in scrollback');
+    killSession(session.id);
+  });
+
+  it('reattach regression: each pty chunk appears exactly once in scrollback and is sent once to new client', async () => {
+    setupFakes();
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    // onData wired once at spawn — only one handler must ever exist
+    const fake = getSession(session.id).ptyProcess;
+    assert.equal(fake._calls.dataHandlers.length, 1, 'exactly one onData handler registered at spawn');
+    const handler = fake._calls.dataHandlers[0];
+
+    // Attach client A, push a chunk, detach
+    const wsA = makeFakeWs();
+    attachClient(session.id, wsA);
+    handler('before-detach');
+    detachClient(session.id);
+
+    // Attach client B (reattach)
+    const wsB = makeFakeWs();
+    attachClient(session.id, wsB);
+    // Clear wsB._sent — it received the scrollback replay; we only care about live sends below
+    wsB._sent.length = 0;
+
+    // Confirm still exactly one handler after reattach (no accumulation)
+    assert.equal(fake._calls.dataHandlers.length, 1, 'still exactly one handler after reattach');
+
+    // Push new chunks through the single handler
+    handler('chunk-A');
+    handler('chunk-B');
+
+    // Each chunk must appear exactly once in scrollback
+    const s = getSession(session.id);
+    assert.equal(s.scrollback.filter((c) => c === 'chunk-A').length, 1, 'chunk-A in scrollback exactly once');
+    assert.equal(s.scrollback.filter((c) => c === 'chunk-B').length, 1, 'chunk-B in scrollback exactly once');
+
+    // Client B must receive each live chunk exactly once
+    assert.equal(wsB._sent.filter((c) => c === 'chunk-A').length, 1, 'chunk-A sent to wsB exactly once');
+    assert.equal(wsB._sent.filter((c) => c === 'chunk-B').length, 1, 'chunk-B sent to wsB exactly once');
+
+    // Client A must NOT receive the new chunks (it was detached)
+    assert.ok(!wsA._sent.includes('chunk-A'), 'detached wsA did not receive chunk-A');
+    assert.ok(!wsA._sent.includes('chunk-B'), 'detached wsA did not receive chunk-B');
+
     killSession(session.id);
   });
 
