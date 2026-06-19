@@ -59,119 +59,6 @@ export function releasePort(worktreePath) {
 }
 
 /**
- * Resolve the git "common dir" for a worktree path.
- * - If <path>/.git is a directory → that IS the common dir.
- * - If <path>/.git is a FILE → parse `gitdir: <X>`, then read <X>/commondir
- *   (relative path from X to common dir) and resolve to absolute.
- * Returns null when the common dir cannot be determined.
- * @param {string} worktreePath
- * @returns {string | null}
- */
-export function resolveGitCommonDir(worktreePath) {
-  const gitPath = path.join(worktreePath, '.git');
-  let stat;
-  try {
-    stat = fs.statSync(gitPath);
-  } catch {
-    return null;
-  }
-  if (stat.isDirectory()) {
-    return gitPath;
-  }
-  // .git is a file — parse "gitdir: <absolute-path>"
-  let content;
-  try {
-    content = fs.readFileSync(gitPath, 'utf8').trim();
-  } catch {
-    return null;
-  }
-  const match = content.match(/^gitdir:\s*(.+)$/);
-  if (!match) return null;
-  const gitdirPath = match[1].trim();
-  const absGitdir = path.isAbsolute(gitdirPath)
-    ? gitdirPath
-    : path.resolve(worktreePath, gitdirPath);
-  // Read commondir file inside the gitdir
-  const commondirFile = path.join(absGitdir, 'commondir');
-  let commondirContent;
-  try {
-    commondirContent = fs.readFileSync(commondirFile, 'utf8').trim();
-  } catch {
-    return null;
-  }
-  // commondirContent is a relative path from absGitdir to the common dir
-  return path.resolve(absGitdir, commondirContent);
-}
-
-const GIT_WT_DEFAULTS = { basePort: 3000, increment: 100, envVars: ['PORT', 'WS_PORT'] };
-
-/**
- * Load git-wt config from <commonDir-parent>/.git-wt.json, merged with defaults.
- * Returns the merged config.
- * @param {string} worktreePath
- * @returns {{ basePort: number, increment: number, envVars: string[] }}
- */
-function readGitWtConfig(worktreePath) {
-  const commonDir = resolveGitCommonDir(worktreePath);
-  if (!commonDir) return { ...GIT_WT_DEFAULTS };
-  // .git-wt.json lives in the project root (parent of common dir)
-  const projectRoot = path.dirname(commonDir);
-  const configPath = path.join(projectRoot, '.git-wt.json');
-  let raw;
-  try {
-    raw = fs.readFileSync(configPath, 'utf8');
-  } catch {
-    return { ...GIT_WT_DEFAULTS };
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { ...GIT_WT_DEFAULTS };
-  }
-  return {
-    basePort: parsed.basePort ?? GIT_WT_DEFAULTS.basePort,
-    increment: parsed.increment ?? GIT_WT_DEFAULTS.increment,
-    envVars: Array.isArray(parsed.envVars) ? parsed.envVars : GIT_WT_DEFAULTS.envVars,
-  };
-}
-
-/**
- * Read the git-wt offset for a branch from the git common dir's git-wt-ports.json.
- * Returns { offset } where offset may be 0 (valid), or null when:
- * - common dir cannot be resolved
- * - file is absent
- * - JSON is malformed
- * - branch is not in allocations
- * @param {string} worktreePath
- * @param {string} branch
- * @returns {{ offset: number } | null}
- */
-export function readGitWtOffset(worktreePath, branch) {
-  const commonDir = resolveGitCommonDir(worktreePath);
-  if (!commonDir) return null;
-  const filePath = path.join(commonDir, 'git-wt-ports.json');
-  let raw;
-  try {
-    raw = fs.readFileSync(filePath, 'utf8');
-  } catch {
-    return null;
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    console.warn(`[local-pm] git-wt-ports.json at ${filePath} is malformed JSON — ignoring`);
-    return null;
-  }
-  const alloc = parsed?.allocations?.[branch];
-  // Branch absent from allocations means offset 0 (e.g. main/develop — the base branch).
-  // Return null ONLY when the file is missing/unreadable or JSON is malformed (handled above).
-  const offset = typeof alloc?.offset === 'number' ? alloc.offset : 0;
-  return { offset };
-}
-
-/**
  * Scan compose files in projectRoot for port variable placeholders.
  * Returns [{varName, base}] where base is the container-side port number (right of colon),
  * or null if no colon or the right side is not a plain number.
@@ -274,39 +161,11 @@ function hasComposeFile(dirPath) {
 }
 
 /**
- * Read KEY=value lines from <worktreePath>/.env and return an object of
- * { KEY: number } for entries whose value is a pure integer string.
- * Returns {} when the file is absent (ENOENT) or unreadable.
- * @param {string} worktreePath
- * @returns {Record<string, number>}
- */
-function readDotEnvNumbers(worktreePath) {
-  let content;
-  try {
-    content = fs.readFileSync(path.join(worktreePath, '.env'), 'utf8');
-  } catch {
-    return {};
-  }
-  const result = {};
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const value = trimmed.slice(eqIdx + 1).trim();
-    if (/^\d+$/.test(value)) {
-      result[key] = Number(value);
-    }
-  }
-  return result;
-}
-
-/**
  * Build the environment variables to inject when starting a server for a worktree.
  * Dispatches on worktree.type:
- *   - 'git-wt': reads git-wt-ports.json offset, uses git-wt envVars config (PORT, WS_PORT)
- *               with formula basePort + offset * increment; falls back to assignPort
+ *   - 'git-wt': does NOT impose PORT or WS_PORT — the dev server owns its own port
+ *               (local-pm observes it from log output). Sets COMPOSE_PROJECT_NAME only
+ *               when a compose file is present.
  *   - 'docker': assigns pool ports per compose var; sets COMPOSE_PROJECT_NAME
  *   - everything else (plain): assigns a single PORT from the pool
  * @param {{ project: string, branch: string, path: string, type?: string }} worktree
@@ -316,25 +175,10 @@ export function buildEnvForTarget(worktree) {
   const { project, branch, path: wtPath, type } = worktree;
 
   if (type === 'git-wt') {
-    const offsetResult = readGitWtOffset(wtPath, branch);
-    // Never fall back to the pool for git-wt targets.
-    // If the ports file is missing/unreadable, offset defaults to 0 (basePort).
-    const offset = offsetResult?.offset ?? 0;
-    const config = readGitWtConfig(wtPath);
-    const dotEnv = readDotEnvNumbers(wtPath);
+    // git-wt projects run on their own port (e.g. always 3000 for OAuth redirect URI
+    // compatibility). local-pm must not impose a port — it observes the actual port
+    // from dev-server log output instead.
     const env = {};
-    for (const varName of config.envVars) {
-      // Use the value from the worktree's .env verbatim when it defines this var as a number.
-      // Only compute basePort + offset * increment for vars absent from .env.
-      const computed = config.basePort + offset * config.increment;
-      env[varName] = String(varName in dotEnv ? dotEnv[varName] : computed);
-    }
-    // Always ensure PORT is set (runner.js depends on it).
-    if (!('PORT' in env)) {
-      const computed = config.basePort + offset * config.increment;
-      env.PORT = String('PORT' in dotEnv ? dotEnv.PORT : computed);
-    }
-    // Only set COMPOSE_PROJECT_NAME when compose files are present.
     if (hasComposeFile(wtPath)) {
       env.COMPOSE_PROJECT_NAME = slugify(`${project}-${branch}`);
     }
@@ -344,7 +188,7 @@ export function buildEnvForTarget(worktree) {
   if (type === 'docker') {
     const vars = scanComposePortVars(wtPath);
     const env = {};
-    for (const { varName, base } of vars) {
+    for (const { varName } of vars) {
       const key = `${wtPath}:${varName}`;
       const port = assignPort(key);
       env[varName] = String(port);

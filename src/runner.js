@@ -83,6 +83,20 @@ function worktreeUsesDocker(worktreePath) {
   return composeFiles.some((f) => fs.existsSync(path.join(worktreePath, f)));
 }
 
+/**
+ * Scan a single log line for a dev server URL and return the port number, or null.
+ * Matches patterns like:
+ *   - Local:  http://localhost:3000
+ *   ready - started server on 0.0.0.0:3000, url: http://localhost:3000
+ * @param {string} line
+ * @returns {number | null}
+ */
+export function extractPortFromLogLine(line) {
+  const match = line.match(/https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{2,5})/);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
 function appendLog(worktreePath, line) {
   let buffer = logs.get(worktreePath);
   if (!buffer) {
@@ -91,6 +105,12 @@ function appendLog(worktreePath, line) {
   }
   buffer.push(line);
   if (buffer.length > LOG_LIMIT) buffer.splice(0, buffer.length - LOG_LIMIT);
+  // On first port detection from dev-server output, update the server entry's port.
+  const entry = active.get(worktreePath);
+  if (entry && entry.port == null) {
+    const detected = extractPortFromLogLine(line);
+    if (detected != null) entry.port = detected;
+  }
 }
 
 function streamToLog(worktreePath, stream) {
@@ -135,12 +155,17 @@ function spawnDevServer(worktreePath, meta, env) {
     env: { ...process.env, ...env },
   });
   // child.pid is the shell (cmd.exe) PID on Windows with shell:true — assigned synchronously
+  // git-wt targets don't get PORT injected — their port is detected from log output.
+  // For plain/docker, use the assigned PORT or APP_PORT from the env.
+  const initialPort = meta?.type === 'git-wt'
+    ? null
+    : (env?.PORT ?? env?.APP_PORT ?? null);
   active.set(worktreePath, {
     project: meta?.project ?? null,
     branch: meta?.branch ?? null,
     path: worktreePath,
     pid: child.pid,
-    port: env?.PORT ?? env?.APP_PORT ?? null,
+    port: initialPort,
     env,
     startedAt: Date.now(),
   });

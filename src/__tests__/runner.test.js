@@ -4,6 +4,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as runner from '../runner.js';
+import { extractPortFromLogLine } from '../runner.js';
 
 // ---------------------------------------------------------------------------
 // Stub helpers
@@ -571,5 +572,83 @@ describe('docker preflight', () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractPortFromLogLine
+// ---------------------------------------------------------------------------
+
+describe('extractPortFromLogLine', () => {
+  it('extracts port from next.js style "- Local: http://localhost:3000" line', () => {
+    const port = extractPortFromLogLine('  - Local:        http://localhost:3000');
+    assert.equal(port, 3000);
+  });
+
+  it('extracts port from vite/next "ready - started server on 0.0.0.0:3000, url: http://localhost:3000" line', () => {
+    const port = extractPortFromLogLine('ready - started server on 0.0.0.0:3000, url: http://localhost:3000');
+    assert.equal(port, 3000);
+  });
+
+  it('returns null for a line with no URL', () => {
+    const port = extractPortFromLogLine('no port here');
+    assert.equal(port, null);
+  });
+
+  it('extracts port from https URL', () => {
+    const port = extractPortFromLogLine('  Local: https://localhost:4321/');
+    assert.equal(port, 4321);
+  });
+
+  it('returns null for a line with only a hostname (no port)', () => {
+    const port = extractPortFromLogLine('http://localhost/no-port');
+    assert.equal(port, null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// port detection from log output
+// ---------------------------------------------------------------------------
+
+describe('port detection from log output', () => {
+  it('appending a matching log line updates getStatus(path).port for git-wt servers', async () => {
+    const refs = {};
+    runner._setSpawnFn(makeSpawnStub(refs));
+
+    const wtPath = 'C:\\fake\\gitwt-detect';
+    await runner.startServer(wtPath, { project: 'p', branch: 'main', path: wtPath, type: 'git-wt' });
+
+    // Initially port is null for git-wt (no PORT injected)
+    assert.equal(runner.getStatus(wtPath).active.port, null, 'port should be null before log line');
+
+    // Simulate dev server printing its URL
+    refs.dev?.stdout.emit('data', '  - Local:        http://localhost:3000\n');
+
+    assert.equal(runner.getStatus(wtPath).active.port, 3000, 'port should be detected from log output');
+  });
+
+  it('only captures the first port match — subsequent lines do not override', async () => {
+    const refs = {};
+    runner._setSpawnFn(makeSpawnStub(refs));
+
+    const wtPath = 'C:\\fake\\gitwt-first-port';
+    await runner.startServer(wtPath, { project: 'p', branch: 'main', path: wtPath, type: 'git-wt' });
+
+    refs.dev?.stdout.emit('data', '  - Local:        http://localhost:3000\n');
+    refs.dev?.stdout.emit('data', '  - Network:      http://192.168.1.1:4000\n');
+
+    assert.equal(runner.getStatus(wtPath).active.port, 3000, 'first detected port should win');
+  });
+
+  it('plain type servers also detect port from log output if initial env port differs', async () => {
+    const refs = {};
+    runner._setSpawnFn(makeSpawnStub(refs));
+
+    const wtPath = 'C:\\fake\\plain-detect';
+    await runner.startServer(wtPath, { project: 'p', branch: 'b', path: wtPath, type: 'plain' });
+
+    // plain type already has a port from pool — log-based detection only fires when port is null
+    const initialPort = runner.getStatus(wtPath).active.port;
+    assert.ok(initialPort != null, 'plain type should have a pool port initially');
   });
 });

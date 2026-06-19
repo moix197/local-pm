@@ -43,32 +43,17 @@ while its console panel is open, so idle servers cost nothing.
 
 ## Hybrid port model
 
-local-pm selects port assignments based on the worktree's `type` field (set in `projects.json` or passed by git-wt):
+local-pm handles ports differently depending on the worktree's `type` field (set in `projects.json` or passed by git-wt):
 
-| Type | How ports are assigned |
+| Type | How ports work |
 |---|---|
-| `git-wt` | Reads `git-wt-ports.json` from the git common dir (shared across all linked worktrees). Uses git-wt config (`basePort`, `increment`, `envVars`) to compute `port = basePort + offset * increment` and injects that value into each configured env var (default: `PORT` and `WS_PORT`). Sets `COMPOSE_PROJECT_NAME` only when a compose file is present. Falls back to pool if offset file or branch entry is absent. |
-| `docker` | Scans compose files for `${VAR}:PORT` entries; assigns a pool port per variable. Sets `COMPOSE_PROJECT_NAME` so `docker compose down` is scoped to this worktree only. |
+| `git-wt` | local-pm does **not** assign or inject a port. git-wt projects run on their own fixed port (e.g. always 3000 for OAuth redirect URI compatibility). local-pm **observes** the actual port by scanning the dev server's log output for the first URL it prints (e.g. `- Local: http://localhost:3000`). Sets `COMPOSE_PROJECT_NAME` only when a compose file is present. |
+| `docker` | Scans compose files for `${VAR}:PORT` entries; assigns a pool port (3100–3199) per variable and injects it. Sets `COMPOSE_PROJECT_NAME` so `docker compose down` is scoped to this worktree only. |
 | plain (default) | Assigns one port from the 3100–3199 pool and injects it as `PORT`. |
 
-### git-wt offset file
+### git-wt port detection
 
-git-wt writes `git-wt-ports.json` in the git **common dir** (`.git/` in the main worktree, shared by all linked worktrees). The file uses an `allocations` object keyed by branch name:
-
-```json
-{
-  "allocations": {
-    "main": { "branch": "main", "offset": 0 },
-    "feat/my-feature": { "branch": "feat/my-feature", "offset": 10 },
-    "hotfix": { "branch": "hotfix", "offset": 20 }
-  },
-  "nextOffset": 21
-}
-```
-
-Port formula: `basePort + offset * increment` (defaults: `basePort=3000`, `increment=100`). An offset of 0 is valid — it maps `main` to port 3000. git-wt also writes `.git-wt.json` at the project root to configure `basePort`, `increment`, and the list of env vars to populate (`envVars`, default `["PORT", "WS_PORT"]`).
-
-local-pm resolves the common dir correctly for both normal repos (`.git/` is a directory) and linked worktrees (`.git` is a file containing `gitdir: <path>`). If the branch key is missing or the file is absent, it falls back to pool assignment.
+For `git-wt` targets, local-pm displays `—` or `starting…` in the dashboard until the dev server prints a URL. On the first log line matching `http(s)://localhost:<port>` (or `127.0.0.1` / `0.0.0.0`), that port is recorded and the dashboard shows it with an **Open** link.
 
 ### Scoped docker compose down
 
@@ -382,16 +367,15 @@ contains invalid JSON, startup fails with a descriptive error
 
 ## Limitations & assumptions
 
-- **Multiple servers run concurrently**, each on a distinct pool port (3100–3199).
-  Port allocation is in-process; a second local-pm instance on the same machine would
-  collide.
+- **Multiple servers run concurrently**. Plain and docker targets use distinct pool ports (3100–3199);
+  git-wt targets run on their own port (not pool-assigned). Port allocation is in-process; a second
+  local-pm instance on the same machine would collide.
 - **Dev mode only.**
 - Each plain server's dev `PORT` is injected from the pool; the worktree's dev script
-  must honour `PORT`. git-wt targets receive the env vars listed in `.git-wt.json`
-  (`envVars`, default `PORT` and `WS_PORT`) computed from the branch offset. docker
-  targets receive their compose port vars (e.g. `APP_PORT`, `WS_HOST_PORT`) — see
-  [Hybrid port model](#hybrid-port-model). The header `lanUrl` points at the first
-  running server's port.
+  must honour `PORT`. git-wt targets are not assigned a port — local-pm reads the port
+  from the dev server's log output. docker targets receive their compose port vars
+  (e.g. `APP_PORT`, `WS_HOST_PORT`) — see [Hybrid port model](#hybrid-port-model).
+  The header `lanUrl` points at the first running server's port.
 - `docker compose down` is run on stop; its errors are ignored so worktrees without a
   compose file still stop cleanly.
 - Windows-specific: uses `npm.cmd`, `taskkill`, and `shell: true` for `.cmd` resolution.

@@ -503,7 +503,7 @@
         const url = lanUrlForPort(state, srv.port);
         row.innerHTML =
           `<span class="branch">${srv.branch ?? srv.path}</span>` +
-          `<span class="port">● ${srv.port != null ? 'port ' + srv.port : 'running'}</span>` +
+          `<span class="port">● ${srv.port != null ? 'port ' + srv.port : 'starting…'}</span>` +
           `<span class="path" title="${srv.path}">${srv.path}</span>`;
         const open = makeOpenLink(url);
         row.appendChild(open);
