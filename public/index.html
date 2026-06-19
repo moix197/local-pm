@@ -240,7 +240,10 @@
         margin-bottom: 12px;
         min-height: 18px;
       }
-      .terminal-pane { height: 300px; background: #000; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+      .terminal-pane { background: #000; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+      .terminal-pane .terminal-header { display: flex; align-items: center; gap: 8px; padding: 5px 9px; background: #161b22; }
+      .terminal-pane .terminal-header .label { color: var(--muted); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .terminal-pane .terminal-body { height: 300px; }
     </style>
   </head>
   <body>
@@ -273,6 +276,7 @@
         <div id="addSetup"></div>
       </div>
       <div id="projects"></div>
+      <div id="terminals"></div>
     </main>
     <script type="module">
       let inFlight = false;
@@ -1017,16 +1021,26 @@
         term.loadAddon(fitAddon);
         const pane = document.createElement('div');
         pane.className = 'terminal-pane';
-        // Insert after the row for this worktreePath
-        const rows = document.querySelectorAll('.row');
-        let targetRow = null;
-        for (const r of rows) {
-          if (r.querySelector('.path')?.title === worktreePath) { targetRow = r; break; }
-        }
-        if (targetRow) targetRow.after(pane);
-        else document.getElementById('projects').appendChild(pane);
 
-        term.open(pane);
+        const header = document.createElement('div');
+        header.className = 'terminal-header';
+        const label = document.createElement('span');
+        label.className = 'label';
+        label.title = worktreePath;
+        label.textContent = worktreePath.split(/[\\/]/).filter(Boolean).pop() ?? worktreePath;
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'icon';
+        closeBtn.title = 'Close terminal';
+        closeBtn.textContent = '✕';
+        header.append(label, closeBtn);
+
+        const body = document.createElement('div');
+        body.className = 'terminal-body';
+        pane.append(header, body);
+        // Live outside #projects so the 2s poll's innerHTML wipe never removes it.
+        document.getElementById('terminals').appendChild(pane);
+
+        term.open(body);
         fitAddon.fit();
 
         const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -1052,8 +1066,10 @@
           const r = clamp(term.rows, 1, 500);
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ resize: { cols: c, rows: r } }));
         });
-        ro.observe(pane);
+        ro.observe(body);
 
+        // Close button drives ws.close(), which fires onclose → full cleanup below.
+        closeBtn.onclick = () => ws.close();
         ws.onclose = () => { ro.disconnect(); term.dispose(); pane.remove(); };
       }
 
