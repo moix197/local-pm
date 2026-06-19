@@ -116,13 +116,21 @@ async function handleCommand(req, res) {
   if (!known || !fs.existsSync(worktreePath)) {
     return sendJson(res, 400, { error: `unknown or missing worktree path: ${worktreePath}` });
   }
+  // Per-target 409 only: reject when THIS path already has a command, never a
+  // global check — a command in another worktree must not block this one.
+  const current = getStatus(worktreePath).command;
+  if (current && current.status === 'running') {
+    return sendJson(res, 409, { error: 'a command is already running for this path' });
+  }
   await runCommand(worktreePath, { cmd, label: label ?? cmd });
   sendJson(res, 200, getStatus(worktreePath));
 }
 
-function handleStopCommand(res) {
-  stopCommand();
-  sendJson(res, 200, getStatus());
+async function handleStopCommand(req, res) {
+  const { path: worktreePath } = await readJsonBody(req);
+  if (!worktreePath) return sendJson(res, 400, { error: 'path is required' });
+  stopCommand(worktreePath);
+  sendJson(res, 200, getStatus(worktreePath));
 }
 
 // --- project CRUD ----------------------------------------------------------
@@ -179,7 +187,7 @@ async function route(req, res) {
   if (method === 'POST' && url.pathname === '/api/start') return handleStart(req, res);
   if (method === 'POST' && url.pathname === '/api/stop') return handleStop(req, res);
   if (method === 'POST' && url.pathname === '/api/command') return handleCommand(req, res);
-  if (method === 'POST' && url.pathname === '/api/command/stop') return handleStopCommand(res);
+  if (method === 'POST' && url.pathname === '/api/command/stop') return handleStopCommand(req, res);
   if (method === 'GET' && url.pathname === '/api/projects') return handleProjectsGet(res);
   if (method === 'POST' && url.pathname === '/api/projects/add') return handleProjectAdd(req, res);
   if (method === 'DELETE' && url.pathname === '/api/projects') return handleProjectDelete(req, res);

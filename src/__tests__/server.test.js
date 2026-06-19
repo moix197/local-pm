@@ -70,10 +70,14 @@ after(async () => {
   }
 });
 
+// Paths used by command tests, cleared per-test (stopCommand is per-path now).
+const cmdPaths = new Set();
+
 beforeEach(async () => {
   stubRunner();
   await runner.stopAll();
-  runner.stopCommand();
+  for (const p of cmdPaths) runner.stopCommand(p);
+  cmdPaths.clear();
 });
 
 function auth(extra = {}) {
@@ -121,6 +125,7 @@ describe('POST /api/command', () => {
 
   it('no longer returns the global 409 when a server is active', async () => {
     const wt = await knownWorktreePath();
+    cmdPaths.add(wt);
     // Make a server active via the runner with stubbed spawn.
     runner._setSpawnFn(() => makeChild(999, false));
     await runner.startServer(wt, { project: 'self', branch: 'main' }, { PORT: '3100' });
@@ -137,6 +142,7 @@ describe('POST /api/command', () => {
 
   it('returns 200 and delegates to runCommand when stopped', async () => {
     const wt = await knownWorktreePath();
+    cmdPaths.add(wt);
     let spawned = false;
     runner._setSpawnFn(() => { spawned = true; return makeChild(111, false); });
 
@@ -149,6 +155,47 @@ describe('POST /api/command', () => {
     assert.ok(spawned, 'runCommand spawned the command');
     const body = await res.json();
     assert.equal(body.command.status, 'running');
+  });
+
+  it('runs a command on the route while another path already has one (no global 409)', async () => {
+    const wt = await knownWorktreePath();
+    const other = wt + '#other';
+    cmdPaths.add(wt);
+    cmdPaths.add(other);
+    // Seed a long-lived command on a DIFFERENT path directly in the runner.
+    runner._setSpawnFn(() => makeChild(700, false));
+    await runner.runCommand(other, { cmd: 'busy', label: 'busy' });
+    assert.equal(runner.getStatus(other).command.status, 'running');
+
+    // The route must still accept a command for the known worktree path — the
+    // busy command in `other` must not produce a global 409.
+    runner._setSpawnFn(() => makeChild(701, false));
+    const res = await fetch(`${baseUrl}/api/command`, {
+      method: 'POST',
+      headers: auth({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ path: wt, cmd: 'cmd-a', label: 'cmd-a' }),
+    });
+    assert.equal(res.status, 200, 'command runs even while another path is busy');
+    assert.equal(runner.getStatus(other).command.status, 'running', 'other path unaffected');
+  });
+
+  it('returns 409 when the same path already has an active command', async () => {
+    const wt = await knownWorktreePath();
+    cmdPaths.add(wt);
+    runner._setSpawnFn(() => makeChild(811, false));
+    const first = await fetch(`${baseUrl}/api/command`, {
+      method: 'POST',
+      headers: auth({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ path: wt, cmd: 'sleep', label: 'sleep' }),
+    });
+    assert.equal(first.status, 200);
+
+    const second = await fetch(`${baseUrl}/api/command`, {
+      method: 'POST',
+      headers: auth({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ path: wt, cmd: 'sleep2', label: 'sleep2' }),
+    });
+    assert.equal(second.status, 409, 'same path twice returns 409');
   });
 });
 

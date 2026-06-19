@@ -13,10 +13,10 @@ const active = new Map(); // path -> ServerEntry
 const inProgress = new Map(); // path -> bool (start/stop in flight for that path)
 const logs = new Map(); // path -> string[]
 
-// Command execution stays a single global slot in Phase 1; per-target commands
-// arrive in Phase 4.
-let command = null;
-let commandInProgress = false;
+// Per-target ad-hoc command state, keyed by worktree path — mirrors the
+// active/inProgress/logs Maps so a command in one path never blocks another.
+const commands = new Map(); // path -> CommandEntry
+const commandInProgress = new Map(); // path -> bool (command spawn in flight for that path)
 
 // ---------------------------------------------------------------------------
 // Injectable seams — replaced in unit tests; defaults are production impls.
@@ -171,14 +171,14 @@ function spawnDevServer(worktreePath, meta, env) {
 function spawnCommand(worktreePath, label, cmd) {
   appendLog(worktreePath, '[cmd] ' + label);
   const child = _spawn(cmd, { cwd: worktreePath, shell: true });
-  command = {
+  commands.set(worktreePath, {
     cwd: worktreePath,
     label,
     pid: child.pid,
     startedAt: Date.now(),
     status: 'running',
     exitCode: null,
-  };
+  });
   streamToLog(worktreePath, child.stdout);
   streamToLog(worktreePath, child.stderr);
   child.on('close', (code) => finalizeCommand(worktreePath, code));
@@ -186,6 +186,7 @@ function spawnCommand(worktreePath, label, cmd) {
 }
 
 function finalizeCommand(worktreePath, code) {
+  const command = commands.get(worktreePath);
   // A stopped command is authoritative: a late close event (e.g. taskkill on
   // Windows can report exit 0) must not flip status back to 'done'.
   if (command?.stopped) return;
@@ -194,16 +195,17 @@ function finalizeCommand(worktreePath, code) {
     command.exitCode = code;
     command.status = code === 0 ? 'done' : 'failed';
   }
-  commandInProgress = false;
+  commandInProgress.set(worktreePath, false);
 }
 
 function failCommand(worktreePath, err) {
+  const command = commands.get(worktreePath);
   if (command?.stopped) return;
   appendLog(worktreePath, `[cmd] error: ${err.message}`);
   if (command) {
     command.status = 'failed';
   }
-  commandInProgress = false;
+  commandInProgress.set(worktreePath, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -253,26 +255,29 @@ export async function stopAll() {
 }
 
 export async function runCommand(worktreePath, { cmd, label }) {
-  if (commandInProgress) return getStatus(worktreePath);
-  if (command && command.status === 'running') {
+  // Per-path guards only: a command in another path must not block this one.
+  if (commandInProgress.get(worktreePath)) return getStatus(worktreePath);
+  const existing = commands.get(worktreePath);
+  if (existing && existing.status === 'running') {
     appendLog(worktreePath, '[cmd] a command is already running');
     return getStatus(worktreePath);
   }
-  commandInProgress = true;
+  commandInProgress.set(worktreePath, true);
   spawnCommand(worktreePath, label, cmd);
   return getStatus(worktreePath);
 }
 
-export function stopCommand() {
-  if (!command || command.status !== 'running') return getStatus(command?.cwd);
+export function stopCommand(worktreePath) {
+  const command = commands.get(worktreePath);
+  if (!command || command.status !== 'running') return getStatus(worktreePath);
   // Mark stopped BEFORE killing so the child's late close/error handler no-ops
   // instead of flipping status back to 'done' (taskkill can report exit 0).
   command.stopped = true;
   command.status = 'failed';
   _killFn(command.pid);
   appendLog(command.cwd, `[cmd] stopped (pid ${command.pid})`);
-  commandInProgress = false;
-  return getStatus(command.cwd);
+  commandInProgress.set(worktreePath, false);
+  return getStatus(worktreePath);
 }
 
 function isInstalling(worktreePath) {
@@ -281,13 +286,13 @@ function isInstalling(worktreePath) {
 
 /**
  * Status for a single target path: its server entry (or null), installing flag,
- * and the (global, Phase 1) command slot.
+ * and that path's own command entry (or null).
  */
 export function getStatus(worktreePath) {
   return {
     active: active.get(worktreePath) ?? null,
     installing: isInstalling(worktreePath),
-    command,
+    command: commands.get(worktreePath) ?? null,
   };
 }
 

@@ -481,6 +481,9 @@
         stop.textContent = 'Stop';
         stop.onclick = () => post('/api/stop', { path: srv.path });
         row.appendChild(stop);
+        // Per-target ad-hoc command: each running server has its own input, scoped
+        // to srv.path, so commanding one server never blocks another.
+        row.appendChild(makeFreeFormInput({ path: srv.path, branch: srv.branch ?? srv.path }, false));
         return row;
       }
 

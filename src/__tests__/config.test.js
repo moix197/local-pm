@@ -167,6 +167,30 @@ test('updateProject: patches an entry, preserving its root', () => {
   });
 });
 
+test('updateProject: ignores non-whitelisted keys (root/type immutable)', () => {
+  withProjectsFile(() => {
+    fs.writeFileSync(
+      projectsFile,
+      JSON.stringify([{ name: 'a', root: 'C:/p/a', type: 'plain' }]) + '\n',
+      'utf8',
+    );
+    const updated = updateProject('C:/p/a', {
+      name: 'renamed',
+      root: 'C:/p/hijacked',
+      type: 'docker',
+      injected: 'nope',
+    });
+    assert.equal(updated.name, 'renamed', 'whitelisted field applied');
+    assert.equal(updated.root, 'C:/p/a', 'root not overwritten');
+    assert.equal(updated.type, 'plain', 'type not overwritten');
+    assert.equal(updated.injected, undefined, 'arbitrary key ignored');
+    const raw = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+    assert.equal(raw[0].root, 'C:/p/a');
+    assert.equal(raw[0].type, 'plain');
+    assert.equal(raw[0].injected, undefined);
+  });
+});
+
 test('updateProject: returns null when no entry matches', () => {
   withProjectsFile(() => {
     fs.writeFileSync(projectsFile, JSON.stringify([{ name: 'a', root: 'C:/p/a' }]) + '\n', 'utf8');

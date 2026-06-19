@@ -103,8 +103,14 @@ export function removeProject(root) {
   return true;
 }
 
+// Only these fields may be changed via PATCH. `root` is the key and is immutable;
+// `type` is auto-detected, never user-editable. A patch with any other key has
+// that key silently ignored so a caller can't overwrite identity/detection fields.
+const EDITABLE_FIELDS = ['name', 'devCmd', 'portVars', 'commands'];
+
 /**
- * Shallow-merge `patch` onto the project whose `root` matches (atomic write).
+ * Shallow-merge the whitelisted fields of `patch` onto the project whose `root`
+ * matches (atomic write). Non-whitelisted keys (incl. `root`/`type`) are ignored.
  * @param {string} root
  * @param {object} patch
  * @returns {object|null} the updated entry, or null if no match
@@ -114,7 +120,11 @@ export function updateProject(root, patch) {
   const projects = readProjectsFile();
   const idx = projects.findIndex((p) => p.root === root);
   if (idx === -1) return null;
-  projects[idx] = { ...projects[idx], ...patch, root: projects[idx].root };
+  const allowed = {};
+  for (const key of EDITABLE_FIELDS) {
+    if (key in patch) allowed[key] = patch[key];
+  }
+  projects[idx] = { ...projects[idx], ...allowed };
   writeProjectsFile(projects);
   return projects[idx];
 }
