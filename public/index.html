@@ -467,8 +467,10 @@
         const res = await fetch('/api/logs?path=' + encodeURIComponent(path), { headers: authHeaders() });
         if (res.status === 401) return renderAuthError();
         const body = await res.json();
+        const text = (body.logs ?? []).join('\n');
+        if (text === pre.textContent) return;
         const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
-        pre.textContent = (body.logs ?? []).join('\n');
+        pre.textContent = text;
         if (atBottom) pre.scrollTop = pre.scrollHeight;
       }
 
@@ -531,6 +533,14 @@
 
       function renderRunning(state) {
         const container = document.getElementById('running');
+        // Preserve open console panels across re-renders: capture their nodes (with
+        // text + scroll position) before clearing, then re-attach the same elements
+        // so they don't flash empty or lose scroll on every poll.
+        const savedConsoles = new Map();
+        for (const pre of container.querySelectorAll('pre[data-console]')) {
+          const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+          savedConsoles.set(pre.dataset.console, { pre, scrollTop: pre.scrollTop, atBottom });
+        }
         container.innerHTML = '';
         const running = state.running ?? [];
         if (running.length === 0) return;
@@ -544,7 +554,11 @@
         container.appendChild(h2);
         for (const srv of running) {
           container.appendChild(makeRunningRow(state, srv));
-          if (openConsoles.has(srv.path)) container.appendChild(makeConsolePanel(srv.path));
+          if (!openConsoles.has(srv.path)) continue;
+          const saved = savedConsoles.get(srv.path);
+          const pre = saved ? saved.pre : makeConsolePanel(srv.path);
+          container.appendChild(pre);
+          if (saved) pre.scrollTop = saved.atBottom ? pre.scrollHeight : saved.scrollTop;
         }
       }
 
