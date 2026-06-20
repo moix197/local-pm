@@ -116,16 +116,17 @@ No automated tests — justified because: pure README/docs change with explicit 
 
 **Steps:**
 
-- [ ] READ the actual source before writing anything: `src/server.js`, `src/runner.js`, `src/token.js`, `src/config.js`, `src/detect.js`. Confirm route list, the `/api/*` auth guard, `ensureToken()`/`token.local` origin, the `LOG_LIMIT` value, the npm-install prereq, docker compose down + `COMPOSE_PROJECT_NAME`, and the per-target `inProgress` collision maps.
-- [ ] Add the index router rows for the backbone modules using real `src/` paths and one-line responsibilities; link each row to any decision file kept for it.
-- [ ] Fill the daemon portion of `architecture.md` under the three headings: System shape (daemon process, no framework, no build), Dependency direction (server entry depends on services `runner`/`config`/`token`; services don't depend on the entry; one-way), Data flow (incoming request → `/api/*` bearer check → route handler → runner/config side effects; log fetch is lazy/on-demand).
-- [ ] Apply the answerability filter to each candidate decision and write ONLY the non-recoverable ones, using the formalized template:
+- [x] READ the actual source before writing anything: `src/server.js`, `src/runner.js`, `src/token.js`, `src/config.js`, `src/detect.js`. Confirm route list, the `/api/*` auth guard, `ensureToken()`/`token.local` origin, the `LOG_LIMIT` value, the npm-install prereq, docker compose down + `COMPOSE_PROJECT_NAME`, and the per-target `inProgress` collision maps.
+- [x] Add the index router rows for the backbone modules using real `src/` paths and one-line responsibilities; link each row to any decision file kept for it.
+- [x] Fill the daemon portion of `architecture.md` under the three headings: System shape (daemon process, no framework, no build), Dependency direction (server entry depends on services `runner`/`config`/`token`; services don't depend on the entry; one-way), Data flow (incoming request → `/api/*` bearer check → route handler → runner/config side effects; log fetch is lazy/on-demand).
+- [x] Apply the answerability filter to each candidate decision and write ONLY the non-recoverable ones, using the formalized template:
   - `node-builtins-only` — keep (why-not-a-framework is a context choice, not in code).
   - `lan-bearer-token-auth` — keep (why auth at all on LAN + why timing-safe for a short token is not self-evident).
   - `windows-process-tree-kill` — keep (why `/T /F`, the `shell:true`+`npm.cmd` swap, and the lingering-grandchild caveat need Windows-process knowledge).
   - `log-ring-buffer-300` — keep only if the exact 300 sizing has a non-recoverable rationale; if it reads as an arbitrary hardcoded constant with no defensible *why*, DROP it (do not manufacture a decision).
   - Research also flagged "per-target inProgress guards" and "memoized token cache / query-token-for-WS" as candidates — include a decision file only if, after reading the code, the *why* is genuinely non-recoverable; otherwise leave them out.
-- [ ] Keep every file terse and single-topic. No code restatement.
+  - _Execution result: KEPT `node-builtins-only`, `lan-bearer-token-auth`, `windows-process-tree-kill`. DROPPED `log-ring-buffer-300` (bare constant, no defensible why), `inProgress guards` and `token cache` (code comments already explain — recoverable)._
+- [x] Keep every file terse and single-topic. No code restatement.
 
 **Tests:**
 
@@ -133,23 +134,23 @@ No automated tests — justified because: pure docs change. Correctness is verif
 
 **Verification:**
 
-- [ ] `index.md` has a row for each backbone module (`server.js`, `runner.js`, `token.js`, `config.js`, `detect.js`) and every path resolves to a real file.
-- [ ] `architecture.md` daemon content under all three headings is filled and internally consistent (no contradicting the source read in step 1).
-- [ ] Each created `decisions/` file follows the formalized template and passes the answerability filter (a reviewer agrees the *why* is not recoverable from code).
-- [ ] Cold-read smoke: a reader given only `.ai/` can name the file holding the API routes and the file holding the auth check, and can cite the lifecycle prerequisite (npm install when `node_modules` absent).
+- [x] `index.md` has a row for each backbone module (`server.js`, `runner.js`, `token.js`, `config.js`, `detect.js`) and every path resolves to a real file.
+- [x] `architecture.md` daemon content under all three headings is filled and internally consistent (no contradicting the source read in step 1).
+- [x] Each created `decisions/` file follows the formalized template and passes the answerability filter (a reviewer agrees the *why* is not recoverable from code).
+- [x] Cold-read smoke: a reader given only `.ai/` can name the file holding the API routes and the file holding the auth check, and can cite the lifecycle prerequisite (npm install when `node_modules` absent).
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing — or no-tests justification accepted
-- [ ] Documentation updated (this phase IS documentation)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `docs(ai): document daemon backbone — lifecycle, API/auth, configuration`
-- [ ] Phase marked complete
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn (code-reviewer ran as subagent under /execute-prd)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session (N/A — reviewer ran as isolated subagent)
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file (trimmed anti-wiki nit in windows-process-tree-kill.md)
+- [x] Tests for this phase written and passing — or no-tests justification accepted
+- [x] Documentation updated (this phase IS documentation)
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `docs(ai): document daemon backbone — lifecycle, API/auth, configuration`
+- [x] Phase marked complete
 
 ---
 

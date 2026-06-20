@@ -6,4 +6,4 @@
 
 **Rejected:** `process.kill` / `child.kill()` — only signals the direct child (the shell), leaving the server tree alive. Spawning bare `npm` without `shell:true` — not executable on Windows.
 
-**Constraints it creates:** Caveat — a process that re-parents or double-forks past the tree `taskkill` walks can still linger; teardown is best-effort. The kill path is Windows-specific (`taskkill`); a cross-platform port would need a POSIX equivalent (e.g. process-group kill). Kill is fire-and-forget — `stopCommand` marks the entry `stopped` before killing so the late close/error handler no-ops (taskkill can report exit 0).
+**Constraints it creates:** Caveat — a process that re-parents or double-forks past the tree `taskkill` walks can still linger; teardown is best-effort. The kill path is Windows-specific (`taskkill`); a cross-platform port would need a POSIX equivalent (e.g. process-group kill).
