@@ -9,6 +9,11 @@ anywhere real.
 
 | Module | Responsibility (one line) | Path | Related docs |
 | ------ | ------------------------- | ---- | ------------ |
+| server | HTTP + WS entry: routes `/` + `/api/*`, guards `/api/*` with bearer auth | `src/server.js` | [node-builtins-only](decisions/node-builtins-only.md) |
+| runner | Per-target dev-server + ad-hoc command lifecycle (start/stop, install, logs) | `src/runner.js` | [windows-process-tree-kill](decisions/windows-process-tree-kill.md) |
+| token | Generates/loads `token.local`; timing-safe bearer check for `/api/*` | `src/token.js` | [lan-bearer-token-auth](decisions/lan-bearer-token-auth.md) |
+| config | Project store: atomic `projects.json` read/write + PATCH whitelist | `src/config.js` | — |
+| detect | Classifies a folder as git-wt / docker / plain; sources devCmd from scripts | `src/detect.js` | — |
 
 ## Cross-cutting
 
