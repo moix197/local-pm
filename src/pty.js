@@ -110,6 +110,11 @@ export async function spawnSession({ worktreePath, kind, cols, rows, sessionId }
 export function attachClient(id, ws) {
   const session = sessions.get(id);
   if (!session) return;
+  // Supersede any client already attached to this session so a reattach never
+  // leaves an orphaned authorized socket (e.g. two tabs reusing a sessionId).
+  if (session.ws && session.ws !== ws) {
+    session.ws.close();
+  }
   // Replay existing scrollback to the new client in order
   for (const chunk of session.scrollback) {
     ws.send(chunk);
