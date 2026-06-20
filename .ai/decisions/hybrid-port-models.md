@@ -6,4 +6,4 @@
 
 **Rejected:** Assigning a pool port to git-wt like the other types — rejected because it would change the redirect URI and break auth flows. (The docker per-compose-var and plain single-PORT branches are not a "decision" worth a record: they fall straight out of how compose ports and plain dev servers consume env, and are documented as mechanics in `architecture.md`.)
 
-**Constraints it creates:** Two git-wt worktrees of the same project cannot run simultaneously on the same fixed port — port-collision avoidance for git-wt is the dev server's / git-wt's own responsibility, not local-pm's pool. local-pm must parse the port from log output for git-wt targets instead of knowing it up front.
+**Constraints it creates:** Port selection for git-wt is the dev server's / git-wt's own responsibility (it derives ports via offset + the worktree `.env`), not local-pm's pool — so local-pm must parse the actual port from log output for git-wt targets instead of knowing it up front, and must never inject a pool port that would override the OAuth-registered URL.

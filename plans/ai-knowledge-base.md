@@ -173,13 +173,14 @@ No automated tests — justified because: pure docs change. Correctness is verif
 
 **Steps:**
 
-- [ ] READ the actual source first: `src/ports.js`, `src/worktrees.js`, and re-check `src/detect.js` for the type markers. Confirm the 3100–3199 range, `assignPort`/`releasePort` with composite `${path}:${varName}` keys, `buildEnvForTarget` branching by type, `COMPOSE_PROJECT_NAME` slugging, the `git worktree list --porcelain` parse, and the synthetic-root fallback row.
-- [ ] Add index router rows for `ports.js` and `worktrees.js` with real paths and terse responsibilities; link to kept decision files.
-- [ ] Extend `architecture.md` Data flow: project → worktree enumeration (porcelain parse or synthetic root) → per-target env build (type-dependent) → ports allocated from the in-memory pool → injected into the spawn env. Note pool is process-memory only (lost on restart) if it clarifies the boundary.
-- [ ] Apply the answerability filter:
+- [x] READ the actual source first: `src/ports.js`, `src/worktrees.js`, and re-check `src/detect.js` for the type markers. Confirm the 3100–3199 range, `assignPort`/`releasePort` with composite `${path}:${varName}` keys, `buildEnvForTarget` branching by type, `COMPOSE_PROJECT_NAME` slugging, the `git worktree list --porcelain` parse, and the synthetic-root fallback row.
+- [x] Add index router rows for `ports.js` and `worktrees.js` with real paths and terse responsibilities; link to kept decision files.
+- [x] Extend `architecture.md` Data flow: project → worktree enumeration (porcelain parse or synthetic root) → per-target env build (type-dependent) → ports allocated from the in-memory pool → injected into the spawn env. Note pool is process-memory only (lost on restart) if it clarifies the boundary.
+- [x] Apply the answerability filter:
   - `hybrid-port-models` — likely KEEP only the genuinely non-recoverable kernel (e.g., *why* git-wt must keep its own fixed port — OAuth/redirect-URI constraint that the code does not state). Research judged much of the docker/plain branching as recoverable from code+tests; document only the non-recoverable why, and let `architecture.md` carry the recoverable mechanics. If nothing survives the filter, DROP the file and cover the mechanics in architecture only.
   - `port-pool-3100-3199` — KEEP only if a non-arbitrary rationale exists; research found no rationale in code. If it's an undocumented arbitrary choice, DROP rather than invent one.
-- [ ] Keep files single-topic and terse.
+  - _Execution result: KEPT `hybrid-port-models` (OAuth redirect-URI constraint is external, non-recoverable). DROPPED `port-pool-3100-3199` (bare constant, no rationale in code)._
+- [x] Keep files single-topic and terse.
 
 **Tests:**
 
@@ -187,23 +188,23 @@ No automated tests — justified because: pure docs change. Verified structurall
 
 **Verification:**
 
-- [ ] `index.md` has rows for `ports.js` and `worktrees.js`; paths resolve.
-- [ ] `architecture.md` Data flow now traces worktree listing → env build → port assignment → spawn env, consistent with the source.
-- [ ] Any kept `decisions/` file passes the answerability filter; no manufactured rationale for the pool range.
-- [ ] Cold-read smoke: a reader given only `.ai/` answers "where is port allocation + what's the range" and "what selects the port model" with correct file pointers.
+- [x] `index.md` has rows for `ports.js` and `worktrees.js`; paths resolve.
+- [x] `architecture.md` Data flow now traces worktree listing → env build → port assignment → spawn env, consistent with the source.
+- [x] Any kept `decisions/` file passes the answerability filter; no manufactured rationale for the pool range.
+- [x] Cold-read smoke: a reader given only `.ai/` answers "where is port allocation + what's the range" and "what selects the port model" with correct file pointers.
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing — or no-tests justification accepted
-- [ ] Documentation updated (this phase IS documentation)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `docs(ai): document worktree discovery and hybrid port management`
-- [ ] Phase marked complete
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn (code-reviewer ran as subagent under /execute-prd)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session (N/A — reviewer ran as isolated subagent)
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file (corrected git-wt fixed-port framing in hybrid-port-models.md)
+- [x] Tests for this phase written and passing — or no-tests justification accepted
+- [x] Documentation updated (this phase IS documentation)
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `docs(ai): document worktree discovery and hybrid port management`
+- [x] Phase marked complete
 
 ---
 
