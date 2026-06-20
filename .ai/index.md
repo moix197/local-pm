@@ -14,6 +14,8 @@ anywhere real.
 | token | Generates/loads `token.local`; timing-safe bearer check for `/api/*` | `src/token.js` | [lan-bearer-token-auth](decisions/lan-bearer-token-auth.md) |
 | config | Project store: atomic `projects.json` read/write + PATCH whitelist | `src/config.js` | — |
 | detect | Classifies a folder as git-wt / docker / plain; sources devCmd from scripts | `src/detect.js` | — |
+| ports | In-memory 3100–3199 port pool (assign/release) + type-dependent env build for spawn | `src/ports.js` | [hybrid-port-models](decisions/hybrid-port-models.md) |
+| worktrees | Enumerates git worktrees per project (porcelain parse) with synthetic-root fallback | `src/worktrees.js` | — |
 
 ## Cross-cutting
 
