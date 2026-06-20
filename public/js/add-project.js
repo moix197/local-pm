@@ -212,17 +212,21 @@ export function toggleBrowser() {
   openBrowser(seed || undefined);
 }
 
-// Open/close the add-project panel. Lightweight close affordance (✕ button,
-// backdrop, auto-close after a setup-free add); Phase 4 promotes this to a full
-// `.overlay` modal wrapping the same markup.
-export function openAddPanel() {
-  document.getElementById('addProject').classList.remove('hidden');
-  document.getElementById('addBackdrop').classList.remove('hidden');
+// Open/close the add-project modal (an `.overlay`/`.overlay-panel` reusing the
+// login overlay structure). Opening resets any stale error/browse/setup state so
+// the modal always starts clean; closing just hides the overlay. The add flow
+// auto-closes after a setup-free add; a needs-setup add keeps it open until the
+// inline setup form is Saved/Cancelled.
+export function openAddModal() {
+  setAddError('');
+  closeBrowser();
+  clearSetup();
+  document.getElementById('addModal').classList.remove('hidden');
+  document.getElementById('addPath').focus();
 }
 
-export function closeAddPanel() {
-  document.getElementById('addProject').classList.add('hidden');
-  document.getElementById('addBackdrop').classList.add('hidden');
+export function closeAddModal() {
+  document.getElementById('addModal').classList.add('hidden');
 }
 
 export async function submitAddProject() {
@@ -252,14 +256,15 @@ export async function submitAddProject() {
           const ok = await apiSendChecked('PATCH', '/api/projects', { root: project.root, patch }, 'save project');
           if (!ok) return;
           clearSetup();
+          closeAddModal();
           refreshAfterMutation();
         },
-        onCancel: () => { clearSetup(); refreshAfterMutation(); },
+        onCancel: () => { clearSetup(); closeAddModal(); refreshAfterMutation(); },
       });
       document.getElementById('addSetup').appendChild(setup);
     } else {
-      // No setup needed — the add is complete, so close the panel.
-      closeAddPanel();
+      // No setup needed — the add is complete, so close the modal.
+      closeAddModal();
     }
     refreshAfterMutation();
   } catch (err) {

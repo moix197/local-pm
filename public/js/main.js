@@ -21,7 +21,7 @@ import {
 import { resolveSelection, setSelected, selected } from './selection.js';
 import { renderSidebar } from './sidebar.js';
 import { renderMain, updateTerminalVisibility } from './main-pane.js';
-import { submitAddProject, toggleBrowser, openAddPanel, closeAddPanel } from './add-project.js';
+import { submitAddProject, toggleBrowser, openAddModal, closeAddModal } from './add-project.js';
 
 function showLoginOverlay(errorMsg = '') {
   document.getElementById('overlayError').textContent = errorMsg;
@@ -116,9 +116,11 @@ registerRender(render);
 registerAuthError(renderAuthError);
 
 document.getElementById('stopAllBtn').addEventListener('click', () => post('/api/stop'));
-document.getElementById('addProjectBtn').addEventListener('click', openAddPanel);
-document.getElementById('addCloseBtn').addEventListener('click', closeAddPanel);
-document.getElementById('addBackdrop').addEventListener('click', closeAddPanel);
+document.getElementById('addProjectBtn').addEventListener('click', openAddModal);
+document.getElementById('addCloseBtn').addEventListener('click', closeAddModal);
+document.getElementById('addModal').addEventListener('click', e => {
+  if (e.target.id === 'addModal') closeAddModal();
+});
 document.getElementById('addBtn').addEventListener('click', submitAddProject);
 document.getElementById('browseBtn').addEventListener('click', toggleBrowser);
 document.getElementById('addPath').addEventListener('keydown', e => {

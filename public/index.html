@@ -34,20 +34,21 @@
         <div id="terminals"></div>
       </div>
     </div>
-    <div id="addBackdrop" class="add-backdrop hidden"></div>
-    <div id="addProject" class="add-project hidden">
-      <div class="add-head">
-        <h2>Add project</h2>
-        <button id="addCloseBtn" class="add-close" aria-label="Close" title="Close">✕</button>
+    <div id="addModal" class="overlay hidden">
+      <div class="overlay-panel">
+        <div class="modal-head">
+          <h2>Add project</h2>
+          <button id="addCloseBtn" class="modal-close" aria-label="Close" title="Close">✕</button>
+        </div>
+        <div class="add-row">
+          <input id="addPath" type="text" placeholder="C:/path/to/project folder" autocomplete="off" />
+          <button id="browseBtn">Browse…</button>
+          <button id="addBtn" class="start">Add</button>
+        </div>
+        <div id="addError" class="add-error"></div>
+        <div id="browsePanel"></div>
+        <div id="addSetup"></div>
       </div>
-      <div class="add-row">
-        <input id="addPath" type="text" placeholder="C:/path/to/project folder" autocomplete="off" />
-        <button id="browseBtn">Browse…</button>
-        <button id="addBtn" class="start">Add</button>
-      </div>
-      <div id="addError" class="add-error"></div>
-      <div id="browsePanel"></div>
-      <div id="addSetup"></div>
     </div>
     <script type="module" src="/js/main.js"></script>
   </body>

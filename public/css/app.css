@@ -89,25 +89,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .cmd-form input[type="text"]:focus { outline: none; border-color: var(--accent); }
 .cmd-form input[type="text"]:disabled { opacity: 0.5; }
-.add-project {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px 14px;
-  margin-bottom: 20px;
-}
-.add-project h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
-.add-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.add-head h2 { margin: 0; }
-.add-close { padding: 2px 8px; line-height: 1; color: var(--muted); }
-.add-close:hover { color: var(--text); border-color: var(--accent); }
-.add-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 40;
-}
-.add-backdrop.hidden { display: none; }
 .add-row { display: flex; gap: 8px; }
 .add-row input[type="text"] {
   flex: 1;
@@ -241,6 +222,10 @@ pre {
   margin-bottom: 12px;
   min-height: 18px;
 }
+.modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+.modal-head h2 { margin: 0; }
+.modal-close { padding: 2px 8px; line-height: 1; color: var(--muted); }
+.modal-close:hover { color: var(--text); border-color: var(--accent); }
 .terminal-group { margin-top: 12px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .terminal-tabs { display: flex; align-items: center; gap: 4px; padding: 5px 9px; background: #161b22; flex-wrap: wrap; }
 .terminal-tabs .group-label { color: var(--muted); font-size: 12px; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -274,16 +259,12 @@ header button { white-space: nowrap; }
   padding: 16px 24px;
   min-width: 0;
 }
-/* The add-project panel floats over the shell until Phase 4 turns it into a
-   modal; keep it readable and out of the flex flow. */
-#addProject.add-project {
-  position: fixed;
-  top: 72px;
-  right: 24px;
-  width: 420px;
-  max-width: calc(100vw - 48px);
-  z-index: 50;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+/* The add-project modal reuses the login `.overlay`/`.overlay-panel`; widen the
+   panel for the path row + browser/setup and let tall content scroll. */
+#addModal .overlay-panel {
+  max-width: 560px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
 }
 
 /* Sidebar nav tree */
