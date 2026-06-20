@@ -14,6 +14,11 @@
 - **Main context coordinates, subagents do the legwork.** Reserve the main thread for synthesizing subagent results and making decisions; push the exploratory and verbose work down into subagents.
 - **One subagent per discrete subtask.** Scope each subagent narrowly and have it return only the conclusion or artifact needed, not the raw intermediate output.
 
+## Project Knowledge Base
+
+- **The `.ai/` directory is the source of truth for project knowledge. Any new feature, architectural change, pattern, dependency, or important decision must update the relevant `.ai/` documentation before considering the work complete.
+- **When working on changes, always consult the knowledge base first and keep it synchronized with the current codebase.
+
 ## Coding principles
 
 - **Keep entry points thin.** Business logic lives in dedicated layers (services, helpers, hooks) — not inside routes, page components, or top-level entry points.
