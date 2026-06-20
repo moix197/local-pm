@@ -1,8 +1,8 @@
 # Plan: Populate the `.ai/` Knowledge Base
 
 **Created:** 2026-06-20
-**Branch:** docs/ai-knowledge-base
-**Status:** not started
+**Branch:** docs/ai-knowledge-base (executed in-place on `main` per user request — no separate worktree)
+**Status:** complete
 
 ## Context
 
@@ -279,25 +279,26 @@ No automated tests — justified because: pure docs change. Verified structurall
 
 **Steps:**
 
-- [ ] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked in the plan file
-- [ ] **Coverage check:** confirm each subsystem has an `index.md` row with a path that resolves on disk: `server.js`, `runner.js`, `token.js`, `config.js`, `detect.js`, `ports.js`, `worktrees.js`, `pty.js`, `ws.js`, `mcp/index.js`, `public/index.html`, `netinfo.js`, `browse.js`. No row points at a missing path.
-- [ ] **Cold-read acceptance:** spawn a subagent restricted to reading `.ai/` ONLY (explicitly forbid grep/source reads) and pose ~5 representative questions spanning the required mix:
+- [x] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked in the plan file
+- [x] **Coverage check:** confirm each subsystem has an `index.md` row with a path that resolves on disk: `server.js`, `runner.js`, `token.js`, `config.js`, `detect.js`, `ports.js`, `worktrees.js`, `pty.js`, `ws.js`, `mcp/index.js`, `public/index.html`, `netinfo.js`, `browse.js`. No row points at a missing path. _(All 13 resolve; all 13 referenced in index.md.)_
+- [x] **Cold-read acceptance:** spawn a subagent restricted to reading `.ai/` ONLY (explicitly forbid grep/source reads) and pose ~5 representative questions spanning the required mix:
   - index routing: "Which file defines the HTTP API routes, and which enforces auth?"
   - index routing: "Where does terminal scrollback live and where is the WS upgrade authorized?"
   - decision why: "Why bearer-token auth on a LAN-only tool?" (or another kept decision)
   - decision why: "Why is `mcp/` a standalone package?"
   - architecture data flow: "Trace what happens from `POST /api/start` to a dev server process running, including the port-injection step."
-- [ ] Any question the subagent answers wrong or with a bad pointer → fix the offending `.ai/` doc, then re-run that question.
-- [ ] **Anti-wiki pass:** re-read every created file; delete or tighten anything that merely restates code.
-- [ ] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent reviews the entire `.ai/` change end-to-end (coverage + answerability + anti-wiki + sync-knowledge compatibility)
-- [ ] Any changes made in response to the final code-reviewer review have been reflected back into this plan file
-- [ ] All tests pass (`pnpm test` — confirm the docs change broke nothing; expected: unchanged green)
-- [ ] No CLAUDE.md invariants violated (terse, single-topic, no dead/restating content, formats compatible with sync-knowledge)
-- [ ] Feature tested manually (the cold-read subagent run IS the golden-path test; edge case: ask one question whose answer is intentionally NOT in `.ai/` and confirm the docs don't falsely claim coverage)
-- [ ] Overall success criteria met
-- [ ] All phase checkboxes above are ticked
+  _(Result: PASS — all 5 answered with correct, specific file pointers; index routed correctly.)_
+- [x] Any question the subagent answers wrong or with a bad pointer → fix the offending `.ai/` doc, then re-run that question. _(None wrong.)_
+- [x] **Anti-wiki pass:** re-read every created file; delete or tighten anything that merely restates code. _(Trimmed mechanic recaps in windows-process-tree-kill.md and lan-bearer-token-auth.md; redundant phrasing in architecture.md.)_
+- [x] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review) _(end-to-end code-reviewer ran as subagent under /execute-prd)_
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session _(N/A — reviewer ran as isolated subagent)_
+- [x] Code-reviewer agent reviews the entire `.ai/` change end-to-end (coverage + answerability + anti-wiki + sync-knowledge compatibility) _(verdict: green on all four axes)_
+- [x] Any changes made in response to the final code-reviewer review have been reflected back into this plan file
+- [x] All tests pass (`pnpm test` — confirm the docs change broke nothing; expected: unchanged green) _(181/181 pass, 0 fail)_
+- [x] No CLAUDE.md invariants violated (terse, single-topic, no dead/restating content, formats compatible with sync-knowledge)
+- [x] Feature tested manually (the cold-read subagent run IS the golden-path test; edge case: ask one question whose answer is intentionally NOT in `.ai/` and confirm the docs don't falsely claim coverage)
+- [x] Overall success criteria met
+- [x] All phase checkboxes above are ticked
 
 ## Documentation
 

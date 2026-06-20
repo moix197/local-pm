@@ -1,6 +1,6 @@
 # Bearer-token auth on a LAN-only tool
 
-**Decision:** Every `/api/*` request must carry `Authorization: Bearer <token>`. The token is a 64-char hex string auto-generated into `token.local` on first run. Comparison uses `crypto.timingSafeEqual` after a length-equality short-circuit.
+**Decision:** Every `/api/*` request must carry `Authorization: Bearer <token>`, compared in constant time. The token is auto-generated into `token.local` on first run.
 
 **Why:** "LAN only" is not a trust boundary — any device or person on the same network (guests, other machines, malware) can reach `0.0.0.0:7420`, and the API can spawn processes and run shell commands on the host. So auth is required despite there being no public exposure. Timing-safe compare is used even for a short-lived local token because a plain `===` leaks length/prefix match timing; using the constant-time primitive is nearly free and removes the question entirely rather than reasoning about whether the leak is exploitable here.
 
