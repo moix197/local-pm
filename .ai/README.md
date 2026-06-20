@@ -61,7 +61,7 @@ Three required headings, each holding only its concern:
 Byte-compatible with sync-knowledge's decision-record shape:
 
 ```markdown
-# Title
+# <Decision title>
 
 **Decision:** <what was chosen, one or two sentences>
 
