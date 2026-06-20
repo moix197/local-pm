@@ -46,7 +46,7 @@ function clampDim(v) {
   return Math.min(500, Math.max(1, Math.floor(n)));
 }
 
-export async function spawnSession({ worktreePath, kind, cols, rows }) {
+export async function spawnSession({ worktreePath, kind, cols, rows, sessionId }) {
   if (!(kind in COMMANDS)) {
     const err = new Error(`invalid kind: ${kind}`);
     err.code = 4403;
@@ -81,7 +81,7 @@ export async function spawnSession({ worktreePath, kind, cols, rows }) {
     env: process.env,
   });
 
-  const id = crypto.randomUUID();
+  const id = (sessionId && typeof sessionId === 'string' && sessionId.length > 0) ? sessionId : crypto.randomUUID();
   const session = { id, ptyProcess, worktreePath: cwd, kind, scrollback: [], scrollbackBytes: 0, ws: null, idleAt: 0 };
   sessions.set(id, session);
 

@@ -379,6 +379,53 @@ describe('detach/reattach/scrollback/reaper', () => {
     killSession(session.id);
   });
 
+  it('client-supplied sessionId is used as Map key and returned on session.id', async () => {
+    setupFakes();
+    const chosenId = 'client-chosen-id';
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24, sessionId: chosenId });
+    assert.equal(session.id, chosenId, 'session.id matches client-supplied id');
+    assert.equal(getSession(chosenId), session, 'getSession finds it by client-supplied id');
+    killSession(chosenId);
+  });
+
+  it('spawnSession without sessionId generates a truthy id and getSession finds it', async () => {
+    setupFakes();
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    assert.ok(session.id, 'generated id is truthy');
+    assert.equal(getSession(session.id), session, 'getSession finds session by generated id');
+    killSession(session.id);
+  });
+
+  it('spawnSession with empty-string sessionId falls back to generated id', async () => {
+    setupFakes();
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24, sessionId: '' });
+    assert.ok(session.id, 'generated id is truthy');
+    assert.notEqual(session.id, '', 'id is not the empty string');
+    assert.equal(getSession(session.id), session, 'getSession finds session by generated id');
+    killSession(session.id);
+  });
+
+  it('client-chosen id is the reattach key: scrollback replays via attachClient', async () => {
+    setupFakes();
+    const chosenId = 'reattach-key-test';
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24, sessionId: chosenId });
+
+    // Push data through the fake pty handler
+    const fake = getSession(chosenId).ptyProcess;
+    const handler = fake._calls.dataHandlers[0];
+    const ws1 = makeFakeWs();
+    attachClient(chosenId, ws1);
+    handler('data-before-detach');
+    detachClient(chosenId);
+
+    // Reattach using the client-chosen id
+    const ws2 = makeFakeWs();
+    attachClient(chosenId, ws2);
+    // scrollback must be replayed to ws2
+    assert.ok(ws2._sent.includes('data-before-detach'), 'scrollback replayed via client-chosen id');
+    killSession(chosenId);
+  });
+
   it('shutdown() kills all sessions and clears the reaper interval', async () => {
     const fakeHandle = { unref() {} };
     _setTimerFn((fn, _interval) => fakeHandle);

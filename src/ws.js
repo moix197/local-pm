@@ -129,7 +129,7 @@ export function attachWebSocket(server) {
       ws.on('close', () => detachClient(existing.id));
     } else {
       // New session path
-      spawnSession({ worktreePath, kind, cols, rows })
+      spawnSession({ worktreePath, kind, cols, rows, sessionId })
         .then((session) => {
           attachClient(session.id, ws);
           wireMessageHandler(session.id, ws);
