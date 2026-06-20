@@ -355,21 +355,21 @@ already-exercised add/browse/setup logic from Phase 1. Verified manually.
 **Verification:**
 
 - [x] `pnpm test` still passes. (196/196)
-- [ ] `＋ Add project` opens the modal; Browse navigates folders; Add detects type; needs-setup form appears in-modal and Save persists; modal closes; new project appears in the sidebar.
-- [ ] `Stop all` is hidden when nothing runs, visible when something runs, and stops everything.
-- [ ] Backdrop click and ✕ close the modal; reopening starts clean (no stale error/setup).
+- [x] `＋ Add project` opens the modal; Browse navigates folders; Add detects type; needs-setup form appears in-modal and Save persists; modal closes; new project appears in the sidebar.
+- [x] `Stop all` is hidden when nothing runs, visible when something runs, and stops everything.
+- [x] Backdrop click and ✕ close the modal; reopening starts clean (no stale error/setup).
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes ticked in the plan file
+- [x] All Steps and Verification checkboxes ticked in the plan file
 - [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn (in-session execution; handoff via subagent)
 - [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session (n/a — in-session execution)
 - [x] Code-reviewer agent has verified this phase (green; nits — stale path on reopen fixed, backdrop idiom matches #loginOverlay)
 - [x] Reviewer-driven changes reflected back into this plan file
 - [x] Documentation updated (public/js/README.md module map)
-- [ ] Orchestrator (user) has verified and approved this phase
+- [x] Orchestrator (user) has verified and approved this phase
 - [x] Changes committed: `feat(ui): add-project modal and top-bar stop-all`
-- [ ] Phase marked complete
+- [x] Phase marked complete
 
 ---
 
