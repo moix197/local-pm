@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-19
 **Branch:** `feat/interactive-terminals`
-**Status:** Phase 1 complete; Phase 2 implemented + code-review green — pending hil manual verification + orchestrator approval
+**Status:** Phases 1 & 2 complete; Phase 3 next
 
 ## Context
 
@@ -256,9 +256,9 @@ These are the only new runtime dependencies this plan adds.
 - [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file _(onData-once fix recorded in Steps + Post-implementation fix below)_
 - [x] Tests for this phase written and passing _(176 pass, 0 fail)_
 - [ ] Documentation updated (see Documentation section) _(detach/reattach + `LOCAL_PM_IDLE_TIMEOUT_MINUTES` README docs deferred to Phase 4 per Documentation table)_
-- [ ] Orchestrator (user) has verified and approved this phase
-- [x] Changes committed: `feat: terminal detach/reattach — scrollback ring buffer + idle reaper` _(cec130f; + fix eb870df)_
-- [ ] Phase marked complete
+- [x] Orchestrator (user) has verified and approved this phase _(approved 2026-06-19; UI terminals confirmed working; residual orchestrator-only checks — browser claude-kind teardown, foreground SIGINT — accepted as deferred)_
+- [x] Changes committed: `feat: terminal detach/reattach — scrollback ring buffer + idle reaper` _(cec130f; + fixes eb870df, 491c8dc; crash-guard 02e6ee3)_
+- [x] Phase marked complete
 
 **Post-implementation fix (eb870df):** First code-review pass was **red** — `attachClient` re-registered `ptyProcess.onData(...)` on every attach; node-pty accumulates listeners, so after a detach→reattach cycle each chunk was appended to scrollback twice and live-sent twice (worsening per reattach). Fix: wire `pty.onData` **exactly once at spawn time**; the single handler always appends to scrollback and live-sends only when a client is attached + backpressure ok (reads `session.ws` dynamically). `attachClient` now only replays scrollback + sets `session.ws`. Added regression test (attach A → detach → attach B → push data → assert each chunk once in scrollback + once to B, handler count stays 1). Re-review verdict: green. 176 tests pass.
 
