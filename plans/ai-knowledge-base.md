@@ -228,15 +228,16 @@ No automated tests — justified because: pure docs change. Verified structurall
 
 **Steps:**
 
-- [ ] READ the actual source first: `src/pty.js`, `src/ws.js`, `mcp/index.js`, `public/index.html`, `src/netinfo.js`, `src/browse.js`. Confirm the scrollback ring sizing + replay-on-attach, idle reaper timeout, WS query-token auth + origin allowlist (with `netinfo`), the four MCP tools + token resolution order + never-crash wrapping, the 2s dashboard polling + WS terminal connection, and the browse project-detection heuristic + directory guard.
-- [ ] Add index router rows for all six modules with real paths and terse responsibilities; link to kept decision files.
-- [ ] Extend `architecture.md`: System shape gains the `mcp/` standalone boundary (own `package.json`, SDK+zod deps, no shared package, forwards to daemon `/api/*`) and the dashboard surface; Data flow gains terminal lifecycle (spawn → scrollback always appended → client attach replays scrollback → detach keeps PTY alive → idle reaper).
-- [ ] Apply the answerability filter:
+- [x] READ the actual source first: `src/pty.js`, `src/ws.js`, `mcp/index.js`, `public/index.html`, `src/netinfo.js`, `src/browse.js`. Confirm the scrollback ring sizing + replay-on-attach, idle reaper timeout, WS query-token auth + origin allowlist (with `netinfo`), the four MCP tools + token resolution order + never-crash wrapping, the 2s dashboard polling + WS terminal connection, and the browse project-detection heuristic + directory guard.
+- [x] Add index router rows for all six modules with real paths and terse responsibilities; link to kept decision files.
+- [x] Extend `architecture.md`: System shape gains the `mcp/` standalone boundary (own `package.json`, SDK+zod deps, no shared package, forwards to daemon `/api/*`) and the dashboard surface; Data flow gains terminal lifecycle (spawn → scrollback always appended → client attach replays scrollback → detach keeps PTY alive → idle reaper).
+- [x] Apply the answerability filter:
   - `standalone-mcp-package` — KEEP (dependency-isolation intent is not visible from the package split alone).
   - `node-pty-over-child-process` — DROP unless reading the code leaves a non-recoverable why; research found the native-PTY requirement is explained by code/comments. If dropped, state the rationale briefly in architecture's System shape instead.
   - `mcp-zero-state-forwarding` — KEEP only the non-recoverable kernel (daemon as single source of truth); if it reads as obvious from the forwarding code, DROP and cover in architecture.
   - Do NOT add `patterns/` files unless a pattern has a genuine 2nd real use in-repo (e.g., the WS query-token auth or the backpressure/high-water guard appearing on both server and client). Only then add one `patterns/<slug>.md`; otherwise add none.
-- [ ] Keep files single-topic and terse.
+  - _Execution result: KEPT `standalone-mcp-package` only. DROPPED `node-pty-over-child-process` (native-PTY need recoverable from spawn/resize code → folded into architecture) and `mcp-zero-state-forwarding` (obvious from forwarding code → covered in architecture). No `patterns/` file (no genuine 2nd use)._
+- [x] Keep files single-topic and terse.
 
 **Tests:**
 
@@ -244,23 +245,23 @@ No automated tests — justified because: pure docs change. Verified structurall
 
 **Verification:**
 
-- [ ] `index.md` has rows for `pty.js`, `ws.js`, `mcp/index.js`, `public/index.html`, `netinfo.js`, `browse.js`; all paths resolve.
-- [ ] `architecture.md` shows the standalone `mcp/` boundary and the terminal attach/detach/reattach data flow.
-- [ ] Kept `decisions/` files pass the answerability filter; dropped candidates are reflected in architecture instead of fabricated as decisions.
-- [ ] Cold-read smoke: a reader given only `.ai/` answers terminal-reattach, MCP-token-source, and standalone-mcp-why with correct pointers.
+- [x] `index.md` has rows for `pty.js`, `ws.js`, `mcp/index.js`, `public/index.html`, `netinfo.js`, `browse.js`; all paths resolve.
+- [x] `architecture.md` shows the standalone `mcp/` boundary and the terminal attach/detach/reattach data flow.
+- [x] Kept `decisions/` files pass the answerability filter; dropped candidates are reflected in architecture instead of fabricated as decisions.
+- [x] Cold-read smoke: a reader given only `.ai/` answers terminal-reattach, MCP-token-source, and standalone-mcp-why with correct pointers.
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing — or no-tests justification accepted
-- [ ] Documentation updated (this phase IS documentation)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `docs(ai): document PTY/WS terminals, MCP adapter, dashboard, network`
-- [ ] Phase marked complete
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn (code-reviewer ran as subagent under /execute-prd)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session (N/A — reviewer ran as isolated subagent)
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file (trimmed redundant "no build step" phrasing in architecture.md)
+- [x] Tests for this phase written and passing — or no-tests justification accepted
+- [x] Documentation updated (this phase IS documentation)
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `docs(ai): document PTY/WS terminals, MCP adapter, dashboard, network`
+- [x] Phase marked complete
 
 ---
 

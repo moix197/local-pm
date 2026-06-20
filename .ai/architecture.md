@@ -29,8 +29,8 @@ used over plain `child_process` because terminal programs need a real PTY/ConPTY
 spawn/resize code, so no decision file. `pty` keeps its sessions (`id → session`)
 in process memory only, capped at `MAX_SESSIONS = 10`.
 
-The browser (`public/index.html`) is a single static file with no build step: it
-talks to the daemon over two channels — a 2s `GET /api/state` + `/api/projects`
+The browser (`public/index.html`) is a single static file that talks to the daemon
+over two channels — a 2s `GET /api/state` + `/api/projects`
 poll for dashboard state, and one WebSocket per terminal tab (xterm.js) for live I/O.
 
 `mcp/` is a **standalone package** outside the daemon: its own `package.json`
