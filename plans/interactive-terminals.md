@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-19
 **Branch:** `feat/interactive-terminals`
-**Status:** Phases 1 & 2 complete; Phase 3 next
+**Status:** Phases 1–3 complete; Phase 4 (docs, hil) next
 
 ## Context
 
@@ -283,6 +283,7 @@ These are the only new runtime dependencies this plan adds.
 | modify | `src/__tests__/pty.test.js` | Add: two sessions for same worktreePath coexist independently; `killSession` for one does not affect the other |
 
 **Session ID generation + reattach auth:** `crypto.randomUUID()` (browser + Node 19+) — cryptographically random, unguessable. The sessionId is the Map key.
+- **Implementation correction (commit `c0fcc64`):** `crypto.randomUUID()` is a SecureContext-only API and is `undefined` over plain `http://` on a LAN IP (the dashboard's actual deployment). Calling it directly threw and aborted `openTerminal` before the WS opened, leaving a black pane with no I/O. Frontend now uses a `newSessionId()` helper: `crypto.randomUUID?.()` when available, else a `sess-<time>-<rand>` fallback. The id is only a Map/reattach key (server accepts any client-supplied id), so the fallback's lower entropy is acceptable for the single-shared-token LAN threat model.
 - **Reattach is always re-authed.** Every WS upgrade (new OR reattach) runs `authorizeUpgrade` first; there is no reattach path that skips auth. Knowing a `worktreePath` is NOT sufficient to attach — the Map is keyed by the random `sessionId`, not by path, so an attacker who knows only a path cannot enumerate or attach to a session.
 - **Threat model note (single shared token):** local-pm uses one dashboard token for one user, so all authorized clients are the same principal — there is no cross-*user* hijack to defend against here. The unguessable sessionId defends against the case where the token later becomes per-scope (ticket-auth follow-up): when tickets land, `attachClient` should additionally verify the reattaching ticket was issued for that session. Recorded as part of the ROADMAP follow-up.
 - Server treats a client-supplied sessionId that is NOT already in the Map as a new-spawn request (subject to all `spawnSession` invariants); it never trusts the value for anything but Map lookup. Collision is astronomically unlikely; no handling needed.
@@ -302,22 +303,22 @@ These are the only new runtime dependencies this plan adds.
 **Verification:**
 
 - [x] Automated tests pass: `pnpm test`
-- [ ] Manually: open "＋ Shell" tab in worktree A; open "＋ Claude" tab in same worktree; both terminals active and independent
-- [ ] Switch between tabs: each reconnects to its session with scrollback intact
-- [ ] Close Shell tab: Claude tab unaffected, shell session still reachable by reopening
+- [x] Manually: open "＋ Shell" tab in worktree A; open "＋ Claude" tab in same worktree; both terminals active and independent
+- [x] Switch between tabs: each reconnects to its session with scrollback intact
+- [x] Close Shell tab: Claude tab unaffected, shell session still reachable by reopening
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
 - [x] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
 - [x] Tests for this phase written and passing
 - [x] Documentation updated (see Documentation section)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat: multi-tab terminals per worktree + Claude quick-action`
-- [ ] Phase marked complete
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `feat: multi-tab terminals per worktree + Claude quick-action`
+- [x] Phase marked complete
 
 ---
 
