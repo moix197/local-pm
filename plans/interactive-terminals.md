@@ -289,9 +289,9 @@ These are the only new runtime dependencies this plan adds.
 
 **Steps:**
 
-- [ ] Update `public/index.html`: add `sessions` Map per worktree panel in JS; update `openTerminal(worktreePath, kind)` to generate a `sessionId`, create a tab element, add to tabs bar; implement tab-switch handler that shows/hides terminal panes and reconnects WS if needed; add "＋ Shell" and "＋ Claude" buttons to each worktree row; "＋ Claude" calls `openTerminal(path, 'claude')`
-- [ ] Add multi-session coexistence test to `src/__tests__/pty.test.js`: spawn two sessions on the same worktreePath; assert both in Map; kill one; assert the other unaffected
-- [ ] Update README: document multi-tab UI and Claude quick-action
+- [x] Update `public/index.html`: add `sessions` Map per worktree panel in JS; update `openTerminal(worktreePath, kind)` to generate a `sessionId`, create a tab element, add to tabs bar; implement tab-switch handler that shows/hides terminal panes and reconnects WS if needed; add "＋ Shell" and "＋ Claude" buttons to each worktree row; "＋ Claude" calls `openTerminal(path, 'claude')`
+- [x] Add multi-session coexistence test to `src/__tests__/pty.test.js`: spawn two sessions on the same worktreePath; assert both in Map; kill one; assert the other unaffected
+- [x] Update README: document multi-tab UI and Claude quick-action
 
 **Tests:**
 
@@ -301,7 +301,7 @@ These are the only new runtime dependencies this plan adds.
 
 **Verification:**
 
-- [ ] Automated tests pass: `pnpm test`
+- [x] Automated tests pass: `pnpm test`
 - [ ] Manually: open "＋ Shell" tab in worktree A; open "＋ Claude" tab in same worktree; both terminals active and independent
 - [ ] Switch between tabs: each reconnects to its session with scrollback intact
 - [ ] Close Shell tab: Claude tab unaffected, shell session still reachable by reopening
@@ -311,10 +311,10 @@ These are the only new runtime dependencies this plan adds.
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
+- [x] Code-reviewer agent has verified this phase
 - [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (see Documentation section)
+- [x] Tests for this phase written and passing
+- [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
 - [ ] Changes committed: `feat: multi-tab terminals per worktree + Claude quick-action`
 - [ ] Phase marked complete
