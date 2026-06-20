@@ -245,6 +245,14 @@ attachWebSocket(server);
 
 // Only bind the port when run as the entry point; importing for tests must not listen.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  // node-pty's ConPTY teardown can throw in-parent on Windows (AttachConsole
+  // failed); a rare such throw must not take the whole server down.
+  process.on('uncaughtException', (err) => {
+    console.error('[server] uncaughtException (kept alive):', err);
+  });
+  process.on('unhandledRejection', (reason) => {
+    console.error('[server] unhandledRejection (kept alive):', reason);
+  });
   server.listen(PORT, '0.0.0.0', () => {
     const lanIp = getLanIPv4();
     console.log(`local-pm listening`);
