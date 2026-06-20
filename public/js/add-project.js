@@ -221,6 +221,7 @@ export function openAddModal() {
   setAddError('');
   closeBrowser();
   clearSetup();
+  document.getElementById('addPath').value = '';
   document.getElementById('addModal').classList.remove('hidden');
   document.getElementById('addPath').focus();
 }
