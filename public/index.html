@@ -23,24 +23,28 @@
       <h1>local-pm</h1>
       <span id="lanUrl"></span>
       <span style="flex:1"></span>
+      <button id="stopAllBtn" class="stop hidden">Stop all</button>
+      <button id="addProjectBtn" class="start">＋ Add project</button>
       <a id="forgetLink" href="#" style="font-size:13px;color:var(--muted)">forget token</a>
     </header>
-    <main>
-      <div id="running" class="running-section"></div>
-      <div id="addProject" class="add-project">
-        <h2>Add project</h2>
-        <div class="add-row">
-          <input id="addPath" type="text" placeholder="C:/path/to/project folder" autocomplete="off" />
-          <button id="browseBtn">Browse…</button>
-          <button id="addBtn" class="start">Add</button>
-        </div>
-        <div id="addError" class="add-error"></div>
-        <div id="browsePanel"></div>
-        <div id="addSetup"></div>
+    <div class="app">
+      <nav id="sidebar"></nav>
+      <div class="main">
+        <div id="selectionView"></div>
+        <div id="terminals"></div>
       </div>
-      <div id="projects"></div>
-      <div id="terminals"></div>
-    </main>
+    </div>
+    <div id="addProject" class="add-project hidden">
+      <h2>Add project</h2>
+      <div class="add-row">
+        <input id="addPath" type="text" placeholder="C:/path/to/project folder" autocomplete="off" />
+        <button id="browseBtn">Browse…</button>
+        <button id="addBtn" class="start">Add</button>
+      </div>
+      <div id="addError" class="add-error"></div>
+      <div id="browsePanel"></div>
+      <div id="addSetup"></div>
+    </div>
     <script type="module" src="/js/main.js"></script>
   </body>
 </html>

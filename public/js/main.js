@@ -1,13 +1,14 @@
 // Bootstrap / orchestration entry point. Registers the render + auth-error
 // callbacks into app-events.js (so lower modules never import main.js back),
-// wires login + DOM listeners, and drives the 2s poll. This phase delegates the
-// actual DOM rendering to views-legacy.js (deleted in Phase 2).
+// wires login + DOM listeners, and drives the 2s poll. render() resolves the
+// selection then orchestrates sidebar.js → main-pane.js → terminal visibility.
 import {
   TOKEN,
   setStoredToken,
   clearStoredToken,
   fetchState,
   fetchProjects,
+  post,
   AuthError,
 } from './api.js';
 import {
@@ -17,7 +18,9 @@ import {
   registerRender,
   registerAuthError,
 } from './app-events.js';
-import { renderRunning, renderProjects } from './views-legacy.js';
+import { resolveSelection, setSelected, selected } from './selection.js';
+import { renderSidebar } from './sidebar.js';
+import { renderMain, updateTerminalVisibility } from './main-pane.js';
 import { submitAddProject, toggleBrowser } from './add-project.js';
 
 function showLoginOverlay(errorMsg = '') {
@@ -72,11 +75,20 @@ function renderAuthError() {
 function render(state, busy = inFlight) {
   if (!state) return;
   const anyRunning = (state.running ?? []).length > 0;
-  document.getElementById('lanUrl').innerHTML = anyRunning
-    ? `<a href="${state.lanUrl}" target="_blank">${state.lanUrl}</a>`
-    : `<span style="color:var(--muted)">dev url: ${state.lanUrl}</span>`;
-  renderRunning(state);
-  renderProjects(state, busy);
+  const lanUrl = state.lanUrl;
+  document.getElementById('lanUrl').innerHTML =
+    lanUrl == null
+      ? ''
+      : anyRunning
+        ? `<a href="${lanUrl}" target="_blank">${lanUrl}</a>`
+        : `<span style="color:var(--muted)">dev url: ${lanUrl}</span>`;
+  document.getElementById('stopAllBtn').classList.toggle('hidden', !anyRunning);
+
+  const resolved = resolveSelection(state, selected);
+  setSelected(resolved);
+  renderSidebar(state);
+  renderMain(state, resolved, busy);
+  updateTerminalVisibility(resolved?.type === 'worktree' ? resolved.path : null);
 }
 
 let pollingInterval = null;
@@ -103,6 +115,10 @@ function startPolling() {
 registerRender(render);
 registerAuthError(renderAuthError);
 
+document.getElementById('stopAllBtn').addEventListener('click', () => post('/api/stop'));
+document.getElementById('addProjectBtn').addEventListener('click', () => {
+  document.getElementById('addProject').classList.toggle('hidden');
+});
 document.getElementById('addBtn').addEventListener('click', submitAddProject);
 document.getElementById('browseBtn').addEventListener('click', toggleBrowser);
 document.getElementById('addPath').addEventListener('keydown', e => {

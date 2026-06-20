@@ -11,5 +11,7 @@ Native ESM, no build step. Served by `serveStatic` from `src/server.js` under
 | `console-panel.js` | Lazy console log polling: `openConsoles`, `refreshConsole`, `toggleConsole`, `makeConsolePanel`. |
 | `terminals.js` | xterm terminal-group lifecycle (open/connect/activate/close); imports only `api.js`. |
 | `add-project.js` | Add/browse/setup + edit-project flows; `openEditRoot` state. |
-| `views-legacy.js` | Phase-1 throwaway: current flat-list renderer (`renderRunning`/`renderProjects` + row/header/control helpers + free-form/edit preservation). Deleted in Phase 2. |
-| `main.js` | Bootstrap: registers `app-events` callbacks, login wiring, `render`, `tick`/`startPolling`, DOM listeners. |
+| `selection.js` | Pure-ish sidebar selection/collapse state: `selected`, `collapsedProjects`, `selectItem`/`isSelected`/`toggleProjectCollapse`, and pure `resolveSelection`. Unit-tested. |
+| `sidebar.js` | Left nav tree: `renderSidebar` + collapsible project rows + worktree rows + green status dots. Imports `selection.js` + `grouping.js`. |
+| `main-pane.js` | Main pane for the selected item: `renderMain` (owns the three persistence invariants), `renderWorktreeView`, `updateTerminalVisibility`, plus control helpers moved from the old `views-legacy.js`. |
+| `main.js` | Bootstrap: registers `app-events` callbacks, login wiring, `render` (resolve→sidebar→main→terminals), `tick`/`startPolling`, top-bar + DOM listeners. |
