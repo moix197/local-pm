@@ -229,12 +229,12 @@ appear under the selected worktree and **persist** when navigating away and back
 
 **Steps:**
 
-- [ ] Build the shell markup + CSS (flex layout, sidebar scroll, main scroll). `#terminals` sits in `.main` as a sibling of `#selectionView`, NOT inside it (so the `#selectionView` rebuild never touches terminal nodes).
-- [ ] Implement `selection.js`; `resolveSelection` keeps a valid selection across polls and drops a stale one (selected worktree stopped+removed, or project removed) → falls back to default.
-- [ ] Implement `sidebar.js`: project rows (caret = collapse only, `stopPropagation` so it doesn't also select; row click = select+expand), worktree rows (click = select), green dots (project dot = any worktree running).
-- [ ] Implement `main-pane.js` worktree view reusing `console-panel.js`/`terminals.js`/the moved helpers; `updateTerminalVisibility(selectedPath)` shows only the selected path's group via `style.display`, hides all others, and is also called on every render so a poll that arrives mid-stream never rebuilds or hides the active terminal.
-- [ ] Preserve the three hard invariants under the new render path: terminals container stays out of the wiped `#selectionView`; console capture/re-attach + free-form `capture/restoreFocusedFreeForm` scoped to `#selectionView` inside `renderMain`; switching selection while a terminal streams must only toggle `display`, never `dispose()`/`ws.close()`.
-- [ ] Delete `views-legacy.js`; remove dead references. Confirm `makeCommandButton`/`makeFreeFormInput`/`makeOpenLink` are imported from `main-pane.js`, not duplicated.
+- [x] Build the shell markup + CSS (flex layout, sidebar scroll, main scroll). `#terminals` sits in `.main` as a sibling of `#selectionView`, NOT inside it (so the `#selectionView` rebuild never touches terminal nodes).
+- [x] Implement `selection.js`; `resolveSelection` keeps a valid selection across polls and drops a stale one (selected worktree stopped+removed, or project removed) → falls back to default.
+- [x] Implement `sidebar.js`: project rows (caret = collapse only, `stopPropagation` so it doesn't also select; row click = select+expand), worktree rows (click = select), green dots (project dot = any worktree running).
+- [x] Implement `main-pane.js` worktree view reusing `console-panel.js`/`terminals.js`/the moved helpers; `updateTerminalVisibility(selectedPath)` shows only the selected path's group via `style.display`, hides all others, and is also called on every render so a poll that arrives mid-stream never rebuilds or hides the active terminal.
+- [x] Preserve the three hard invariants under the new render path: terminals container stays out of the wiped `#selectionView`; console capture/re-attach + free-form `capture/restoreFocusedFreeForm` scoped to `#selectionView` inside `renderMain`; switching selection while a terminal streams must only toggle `display`, never `dispose()`/`ws.close()`.
+- [x] Delete `views-legacy.js`; remove dead references. Confirm `makeCommandButton`/`makeFreeFormInput`/`makeOpenLink` are imported from `main-pane.js`, not duplicated.
 
 **Tests:**
 
@@ -244,7 +244,7 @@ appear under the selected worktree and **persist** when navigating away and back
 
 **Verification:**
 
-- [ ] `pnpm test` passes.
+- [x] `pnpm test` passes. (196/196)
 - [ ] Zero projects: sidebar + main pane render an empty/placeholder state without error.
 - [ ] Sidebar lists projects + worktrees (including bare/root/detached worktrees — whatever `getWorktrees` returns); caret collapses/expands without changing selection; row click selects + expands.
 - [ ] Green dot appears on a running worktree and on its parent project; clears on Stop within one poll.
@@ -259,12 +259,12 @@ appear under the selected worktree and **persist** when navigating away and back
 - [ ] All Steps and Verification checkboxes ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Reviewer-driven changes reflected back into this plan file
-- [ ] Tests written and passing
-- [ ] Documentation updated
+- [x] Code-reviewer agent has verified this phase (green)
+- [x] Reviewer-driven changes reflected back into this plan file
+- [x] Tests written and passing (196/196; +9 selection.test.js)
+- [x] Documentation updated (public/js/README.md module map)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat(ui): app shell with collapsible sidebar and worktree view`
+- [x] Changes committed: `feat(ui): app shell with collapsible sidebar and worktree view`
 - [ ] Phase marked complete
 
 ---
