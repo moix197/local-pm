@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-19
 **Branch:** `feat/interactive-terminals`
-**Status:** Phases 1–3 complete; Phase 4 (docs, hil) next
+**Status:** Complete — all phases + Final Verification done
 
 ## Context
 
@@ -338,9 +338,9 @@ These are the only new runtime dependencies this plan adds.
 
 **Steps:**
 
-- [ ] Update README.md as described
-- [ ] Update ROADMAP.md as described
-- [ ] User reviews and approves both documents
+- [x] Update README.md as described
+- [x] Update ROADMAP.md as described
+- [x] User reviews and approves both documents
 
 **Tests:**
 
@@ -348,25 +348,25 @@ No automated tests — justified because: pure documentation change with no exec
 
 **Verification:**
 
-- [ ] README "Interactive terminals" section present and accurate
-- [ ] README env var table includes `LOCAL_PM_SHELL` and `LOCAL_PM_IDLE_TIMEOUT_MINUTES`
-- [ ] README dependency justification explains node-pty and ws (CLAUDE.md exception documented)
-- [ ] ROADMAP Stage D marked complete
-- [ ] ROADMAP follow-up entry for ticket-auth + WSS present
-- [ ] User has read and approved both documents
+- [x] README "Interactive terminals" section present and accurate
+- [x] README env var table includes `LOCAL_PM_SHELL` and `LOCAL_PM_IDLE_TIMEOUT_MINUTES`
+- [x] README dependency justification explains node-pty and ws (CLAUDE.md exception documented)
+- [x] ROADMAP Stage D marked complete
+- [x] ROADMAP follow-up entry for ticket-auth + WSS present
+- [x] User has read and approved both documents
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing (or no-tests justification accepted)
-- [ ] Documentation updated (see Documentation section)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `docs: document interactive terminals, WS auth, env vars, dep justification, roadmap`
-- [ ] Phase marked complete
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
+- [x] Tests for this phase written and passing (or no-tests justification accepted)
+- [x] Documentation updated (see Documentation section)
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `docs: document interactive terminals, WS auth, env vars, dep justification, roadmap`
+- [x] Phase marked complete
 
 ---
 
@@ -394,18 +394,22 @@ No automated tests — justified because: pure documentation change with no exec
 - No CLAUDE.md invariants violated: pnpm, plain ESM, no build step, thin entry points, tests via node:test
 - Ticket-auth + WSS hardening marked as explicit out-of-scope follow-up in ROADMAP
 
+**Final review outcome (end-to-end, security-focused):** green. All 10 success-criteria security invariants verified against `ws.js`/`pty.js`/`server.js`/`index.html` (pre-handshake 401, `timingSafeEqual` + length guard, Origin allowlist/CSWSH, fixed `kind` command table, validated cwd → 4403, session cap → 4429, idle reaper skips active clients + `shutdown()` teardown, backpressure + scrollback/`maxPayload` caps, crypto-random sessionId with non-secure-context fallback, no full-URL logging). Two non-blocking items:
+- **Applied (commit `37b9110`):** `attachClient` now closes any already-attached socket before reassigning, so a reattach never leaves an orphaned authorized WS (e.g. two tabs reusing a sessionId).
+- **Known follow-up (not blocking):** frontend `activateTab` reattaches only when the socket is `CLOSED`; a `CLOSING` socket falls through and the pane stays dead until manual close/reopen. Pure UX robustness — recorded for a future frontend pass.
+
 **Steps:**
 
-- [ ] Every preceding phase's Steps / Verification / Phase review checkboxes are ticked in this plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent reviews the entire change end-to-end
-- [ ] Any changes made in response to the final code-reviewer review have been reflected back into this plan file
-- [ ] All tests pass: `pnpm test`
-- [ ] No CLAUDE.md invariants violated
-- [ ] Feature tested manually: golden path (open shell terminal, type, resize, detach, reattach); Claude quick-action; multi-tab; idle reaper; auth rejection
-- [ ] Overall success criteria above met
-- [ ] All phase checkboxes above are ticked
+- [x] Every preceding phase's Steps / Verification / Phase review checkboxes are ticked in this plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] Code-reviewer agent reviews the entire change end-to-end
+- [x] Any changes made in response to the final code-reviewer review have been reflected back into this plan file
+- [x] All tests pass: `pnpm test`
+- [x] No CLAUDE.md invariants violated
+- [x] Feature tested manually: golden path (open shell terminal, type, resize, detach, reattach); Claude quick-action; multi-tab; idle reaper; auth rejection
+- [x] Overall success criteria above met
+- [x] All phase checkboxes above are ticked
 
 ---
 
