@@ -245,27 +245,27 @@ appear under the selected worktree and **persist** when navigating away and back
 **Verification:**
 
 - [x] `pnpm test` passes. (196/196)
-- [ ] Zero projects: sidebar + main pane render an empty/placeholder state without error.
-- [ ] Sidebar lists projects + worktrees (including bare/root/detached worktrees — whatever `getWorktrees` returns); caret collapses/expands without changing selection; row click selects + expands.
-- [ ] Green dot appears on a running worktree and on its parent project; clears on Stop within one poll.
-- [ ] Main pane shows only the selected worktree's controls; Start/Stop/console/commands work.
-- [ ] Open ＋Shell + ＋Claude → navigate to another worktree (terminals hide via `display`) → back (same sessions visible, not reconnected, scrollback intact); close tab works.
-- [ ] Rapid selection switching while a terminal streams output does not reconnect/dispose it (DevTools: WS count stable, no new `ws/terminal` connections on switch).
-- [ ] Selected worktree's server is stopped and its worktree disappears (or project removed) → selection falls back to a valid item, no crash, no orphaned terminal group blocking render.
-- [ ] Free-form input focus + caret survive a 2s poll; console scroll preserved.
+- [x] Zero projects: sidebar + main pane render an empty/placeholder state without error.
+- [x] Sidebar lists projects + worktrees (including bare/root/detached worktrees — whatever `getWorktrees` returns); whole project row toggles collapse + selects (changed from caret-only per user feedback); worktree row click selects.
+- [x] Green dot appears on a running worktree and on its parent project; clears on Stop within one poll.
+- [x] Main pane shows only the selected worktree's controls; Start/Stop/console/commands work.
+- [x] Open ＋Shell + ＋Claude → navigate to another worktree (terminals hide via `display`) → back (same sessions visible, not reconnected, scrollback intact); close tab works.
+- [x] Rapid selection switching while a terminal streams output does not reconnect/dispose it (DevTools: WS count stable, no new `ws/terminal` connections on switch).
+- [x] Selected worktree's server is stopped and its worktree disappears (or project removed) → selection falls back to a valid item, no crash, no orphaned terminal group blocking render.
+- [x] Free-form input focus + caret survive a 2s poll; console scroll preserved.
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] All Steps and Verification checkboxes ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn (in-session execution; handoff via subagent)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session (n/a — in-session execution)
 - [x] Code-reviewer agent has verified this phase (green)
 - [x] Reviewer-driven changes reflected back into this plan file
 - [x] Tests written and passing (196/196; +9 selection.test.js)
 - [x] Documentation updated (public/js/README.md module map)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [x] Changes committed: `feat(ui): app shell with collapsible sidebar and worktree view`
-- [ ] Phase marked complete
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `feat(ui): app shell with collapsible sidebar and worktree view` (+ `fix(ui)` a349fed UI polish)
+- [x] Phase marked complete
 
 ---
 
