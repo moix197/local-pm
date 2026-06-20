@@ -236,7 +236,7 @@ pre {
 .terminal-tabs .spacer { flex: 1; }
 .terminal-pane { background: #000; overflow: hidden; }
 .terminal-pane.hidden { display: none; }
-.terminal-pane .terminal-body { height: 300px; }
+.terminal-pane .terminal-body { height: 500px; }
 
 /* --- App shell (Phase 2) --------------------------------------------- */
 .hidden { display: none; }
