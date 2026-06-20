@@ -166,13 +166,13 @@ files. `node --test` passes for extracted pure helpers.
 
 **Steps:**
 
-- [ ] Add `serveStatic(baseDir)` to `src/server.js`; wire `GET /js/*` → `public/js`, `GET /css/*` → `public/css`, placed before the `/api/` auth gate; reuse the renamed `STATIC_CONTENT_TYPES` map.
-- [ ] Confirm traversal guard rejects `../` escapes (`GET /js/../server.js` → 403; encoded `%2e%2e%2f` → 403) and missing file → 404, mirroring `serveVendor`.
-- [ ] Move embedded CSS verbatim to `public/css/app.css`; link it from the shell.
-- [ ] Create `app-events.js` first (the cycle-breaker); extract remaining JS into the modules above with **explicit `import`/`export`** wiring; no logic changes. Lower modules import `app-events.js`/`api.js`, never `main.js`.
-- [ ] Verify the import graph is acyclic (e.g. `madge`-style mental check, or just confirm no module imports `main.js`); confirm the page loads with no "circular dependency" / undefined-export errors in the console.
-- [ ] Preserve the three hard invariants: `#terminals` stays a static container never wiped; console `<pre data-console>` capture/re-attach kept in `renderRunning`; `captureFocusedFreeForm`/`restoreFocusedFreeForm` + `captureEditValues`/`openEditRoot` reseed kept in `renderProjects`.
-- [ ] Add `public/package.json` `{"type":"module"}`; add root `"test": "node --test public/js"` script (run with `pnpm test`).
+- [x] Add `serveStatic(baseDir)` to `src/server.js`; wire `GET /js/*` → `public/js`, `GET /css/*` → `public/css`, placed before the `/api/` auth gate; reuse the renamed `STATIC_CONTENT_TYPES` map.
+- [x] Confirm traversal guard rejects `../` escapes (`GET /js/../server.js` → 403; encoded `%2e%2e%2f` → 403) and missing file → 404, mirroring `serveVendor`.
+- [x] Move embedded CSS verbatim to `public/css/app.css`; link it from the shell.
+- [x] Create `app-events.js` first (the cycle-breaker); extract remaining JS into the modules above with **explicit `import`/`export`** wiring; no logic changes. Lower modules import `app-events.js`/`api.js`, never `main.js`.
+- [x] Verify the import graph is acyclic (e.g. `madge`-style mental check, or just confirm no module imports `main.js`); confirm the page loads with no "circular dependency" / undefined-export errors in the console.
+- [x] Preserve the three hard invariants: `#terminals` stays a static container never wiped; console `<pre data-console>` capture/re-attach kept in `renderRunning`; `captureFocusedFreeForm`/`restoreFocusedFreeForm` + `captureEditValues`/`openEditRoot` reseed kept in `renderProjects`.
+- [x] Add `public/package.json` `{"type":"module"}`; add root `"test": "node --test public/js"` script (run with `pnpm test`).
 - [ ] Manually smoke-test the full app (see Verification).
 
 **Tests:**
@@ -183,9 +183,9 @@ files. `node --test` passes for extracted pure helpers.
 
 **Verification:**
 
-- [ ] `pnpm test` (`node --test public/js`) passes.
-- [ ] App loads from modular files (Network tab shows `/css/app.css` as `text/css`, `/js/*.js` as `application/javascript`); no console errors; no `import` resolution / circular-dependency failures.
-- [ ] `GET /js/../server.js` (and `%2e%2e` encoded) returns 403; a missing asset returns 404.
+- [x] `pnpm test` passes (script value is `node --test "public/js/**/*.test.js"` — see test-script note below; Node 22 rejects the bare `node --test public/js` form).
+- [x] App loads from modular files (Network tab shows `/css/app.css` as `text/css`, `/js/*.js` as `application/javascript`); no console errors; no `import` resolution / circular-dependency failures.
+- [x] `GET /js/../server.js` (and `%2e%2e` encoded) returns 403; a missing asset returns 404.
 - [ ] Manual golden path unchanged: login → see projects/worktrees → Start a server → Open console (logs stream, scroll preserved across polls) → type in free-form input (focus + caret survive a poll) → ＋Shell + ＋Claude (open, type, close, reopen→reattach) → Stop → add a project via Browse → Edit a project (form survives a poll) → Remove a project.
 - [ ] Zero-projects state renders without error (empty `#projects`, no running section).
 
@@ -194,12 +194,12 @@ files. `node --test` passes for extracted pure helpers.
 - [ ] All Steps and Verification checkboxes ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
+- [x] Code-reviewer agent has verified this phase
 - [ ] Reviewer-driven changes reflected back into this plan file
-- [ ] Tests written and passing
-- [ ] Documentation updated (see Documentation section)
+- [x] Tests written and passing
+- [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `refactor(ui): split index.html into ESM modules, add static serving`
+- [x] Changes committed: `refactor(ui): split index.html into ESM modules, add static serving`
 - [ ] Phase marked complete
 
 ---
