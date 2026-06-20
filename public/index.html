@@ -1028,6 +1028,12 @@
       const TERM_HIGH_WATER = 1 << 20;
       const clampDim = (v) => Math.max(1, Math.min(500, v));
 
+      // crypto.randomUUID is SecureContext-only and undefined over plain http on a
+      // LAN IP, so fall back to a local id (used only as a sessions Map key).
+      const newSessionId = () =>
+        crypto.randomUUID?.() ??
+        'sess-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+
       // One terminal group per worktree path. Each group owns a tabs bar and a
       // `sessions` Map<sessionId, {ws, terminal, fitAddon, ro, kind, pane, tabEl}>.
       // Groups live under #terminals so the 2s poll's innerHTML wipe never removes them.
@@ -1108,7 +1114,7 @@
 
       function openTerminal(worktreePath, kind) {
         const group = ensureTerminalGroup(worktreePath);
-        const sessionId = crypto.randomUUID();
+        const sessionId = newSessionId();
         const n = (group.counts[kind] += 1);
         const tabLabel = `${kind === 'claude' ? 'Claude' : 'Shell'} #${n}`;
 
