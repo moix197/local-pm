@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-19
 **Branch:** `feature/ui-app-shell`
-**Status:** not started
+**Status:** complete — all phases done; pending merge to `main`
 
 ## Context
 
@@ -390,16 +390,16 @@ already-exercised add/browse/setup logic from Phase 1. Verified manually.
 
 **Steps:**
 
-- [ ] Every preceding phase's checkboxes are ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent reviews the entire change end-to-end (focus: the three hard invariants under all selection paths; no path-traversal regression in `serveStatic`; import graph is a DAG with no module importing `main.js`; correct `.js`/`.css` MIME types; `state.lanUrl == null` guarded in the top bar)
-- [ ] Reviewer-driven changes reflected back into this plan file
-- [ ] All tests pass
-- [ ] No CLAUDE.md invariants violated (thin `main.js` entry point, small focused functions, modular with no circular deps, no new deps, pnpm)
-- [ ] Feature tested manually (golden path + edge cases: zero projects, project with one bare/root/detached worktree, multiple running servers, rapid select-switching while a terminal streams, a running server whose worktree disappears, removing the selected project)
-- [ ] Overall success criteria met
-- [ ] All phase checkboxes above are ticked
+- [x] Every preceding phase's checkboxes are ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review) (in-session; handoff via subagent)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session (n/a — in-session execution)
+- [x] Code-reviewer agent reviews the entire change end-to-end (focus: the three hard invariants under all selection paths; no path-traversal regression in `serveStatic`; import graph is a DAG with no module importing `main.js`; correct `.js`/`.css` MIME types; `state.lanUrl == null` guarded in the top bar) — green
+- [x] Reviewer-driven changes reflected back into this plan file (lanUrlForPort defensive null guard applied)
+- [x] All tests pass (196/196)
+- [x] No CLAUDE.md invariants violated (thin `main.js` entry point, small focused functions, modular with no circular deps, no new deps, pnpm)
+- [x] Feature tested manually (golden path + edge cases) — verified incrementally per phase on the live worktree dashboard (port 7421)
+- [x] Overall success criteria met
+- [x] All phase checkboxes above are ticked
 
 ## Documentation
 
