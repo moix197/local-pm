@@ -175,6 +175,28 @@ describe('session operations', () => {
     killSession(s1.id);
     killSession(s2.id);
   });
+
+  it('two sessions on same worktreePath coexist; killSession on one leaves the other intact', async () => {
+    const fakes = setupFakes();
+    const shell = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    const claude = await spawnSession({ worktreePath: FAKE_PATH, kind: 'claude', cols: 80, rows: 24 });
+    // Both coexist in the Map under distinct ids
+    assert.notEqual(shell.id, claude.id);
+    assert.ok(getSession(shell.id), 'shell session in Map');
+    assert.ok(getSession(claude.id), 'claude session in Map');
+    // They are independent processes
+    assert.notEqual(shell.ptyProcess, claude.ptyProcess);
+
+    // Killing one does not affect the other
+    killSession(shell.id);
+    assert.equal(getSession(shell.id), null, 'shell session removed');
+    assert.ok(getSession(claude.id), 'claude session still alive');
+    // Only the shell pty was killed
+    assert.equal(fakes[0]._calls.kill, 1, 'shell pty killed once');
+    assert.equal(fakes[1]._calls.kill, 0, 'claude pty NOT killed');
+
+    killSession(claude.id);
+  });
 });
 
 describe('detach/reattach/scrollback/reaper', () => {

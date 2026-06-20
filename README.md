@@ -224,13 +224,27 @@ exit on its own. Use **Stop command** to kill it. There is no interactive stdin 
 
 ## Interactive terminals
 
-Each stopped worktree row has an **Open terminal** button that opens an embedded xterm.js
-terminal pane wired to a real PTY on the server via WebSocket.
+Each stopped worktree row has two terminal quick-actions that open embedded xterm.js
+terminal panes wired to a real PTY on the server via WebSocket:
+
+- **＋ Shell** — opens an interactive shell (`pwsh.exe`/`cmd.exe`) in the worktree folder.
+- **＋ Claude** — opens a terminal already running the `claude` CLI in that worktree.
+
+### Multiple tabbed terminals per worktree
+
+Each worktree can hold several terminals at once. Clicking **＋ Shell** or **＋ Claude**
+adds a new tab to that worktree's terminal group (labelled `Shell #N` / `Claude #N`); a
+Shell and a Claude tab run **independently and concurrently**. Click a tab to switch to
+it — backgrounded sessions keep running on the server, and switching back replays the
+scrollback so no output is lost. Each tab has an **✕** that closes it: the WebSocket
+disconnects but the server-side session stays alive (per the detach/reattach semantics),
+so reopening reconnects to the same PTY. Every tab generates a `crypto.randomUUID()`
+`sessionId` that keys the session both client- and server-side.
 
 ### WebSocket endpoint
 
 ```
-ws://localhost:7420/ws/terminal?token=<token>&worktreePath=<path>&kind=<kind>&cols=<n>&rows=<n>
+ws://localhost:7420/ws/terminal?token=<token>&worktreePath=<path>&kind=<kind>&cols=<n>&rows=<n>&sessionId=<uuid>
 ```
 
 | Query param | Values | Default |
@@ -240,6 +254,7 @@ ws://localhost:7420/ws/terminal?token=<token>&worktreePath=<path>&kind=<kind>&co
 | `kind` | `shell` (interactive shell) or `claude` (claude CLI) | required |
 | `cols` | terminal width (1–500) | required |
 | `rows` | terminal height (1–500) | required |
+| `sessionId` | UUID keying the session; a known id **reattaches** (replays scrollback), an unknown id **spawns** a new session | required (client-generated) |
 
 ### Authentication model
 
