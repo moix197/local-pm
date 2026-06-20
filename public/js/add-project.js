@@ -211,6 +211,19 @@ export function toggleBrowser() {
   openBrowser(seed || undefined);
 }
 
+// Open/close the add-project panel. Lightweight close affordance (✕ button,
+// backdrop, auto-close after a setup-free add); Phase 4 promotes this to a full
+// `.overlay` modal wrapping the same markup.
+export function openAddPanel() {
+  document.getElementById('addProject').classList.remove('hidden');
+  document.getElementById('addBackdrop').classList.remove('hidden');
+}
+
+export function closeAddPanel() {
+  document.getElementById('addProject').classList.add('hidden');
+  document.getElementById('addBackdrop').classList.add('hidden');
+}
+
 export async function submitAddProject() {
   const input = document.getElementById('addPath');
   const folderPath = cleanPath(input.value);
@@ -243,6 +256,9 @@ export async function submitAddProject() {
         onCancel: () => { clearSetup(); refreshAfterMutation(); },
       });
       document.getElementById('addSetup').appendChild(setup);
+    } else {
+      // No setup needed — the add is complete, so close the panel.
+      closeAddPanel();
     }
     refreshAfterMutation();
   } catch (err) {

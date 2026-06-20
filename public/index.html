@@ -34,8 +34,12 @@
         <div id="terminals"></div>
       </div>
     </div>
+    <div id="addBackdrop" class="add-backdrop hidden"></div>
     <div id="addProject" class="add-project hidden">
-      <h2>Add project</h2>
+      <div class="add-head">
+        <h2>Add project</h2>
+        <button id="addCloseBtn" class="add-close" aria-label="Close" title="Close">✕</button>
+      </div>
       <div class="add-row">
         <input id="addPath" type="text" placeholder="C:/path/to/project folder" autocomplete="off" />
         <button id="browseBtn">Browse…</button>

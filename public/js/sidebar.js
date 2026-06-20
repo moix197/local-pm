@@ -41,11 +41,6 @@ function makeNavProject(project, worktrees, running) {
   const caret = document.createElement('span');
   caret.className = 'caret' + (collapsed ? ' collapsed' : '');
   caret.textContent = '▾';
-  // Caret only toggles collapse; stopPropagation so it never also selects.
-  caret.onclick = (e) => {
-    e.stopPropagation();
-    toggleProjectCollapse(project);
-  };
   head.appendChild(caret);
 
   head.appendChild(statusDot(worktrees.some((w) => running.has(w.path))));
@@ -55,10 +50,11 @@ function makeNavProject(project, worktrees, running) {
   label.textContent = project;
   head.appendChild(label);
 
-  // Row click selects the project and expands it (so its worktrees are visible).
+  // Whole-row click selects the project AND toggles its collapse state (the
+  // caret is a visual indicator only; clicking it falls through to here).
   head.onclick = () => {
-    collapsedProjects.delete(project);
     selectItem(item);
+    toggleProjectCollapse(project);
   };
   wrap.appendChild(head);
 

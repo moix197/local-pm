@@ -97,6 +97,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-bottom: 20px;
 }
 .add-project h2 { font-size: 13px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.add-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.add-head h2 { margin: 0; }
+.add-close { padding: 2px 8px; line-height: 1; color: var(--muted); }
+.add-close:hover { color: var(--text); border-color: var(--accent); }
+.add-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 40;
+}
+.add-backdrop.hidden { display: none; }
 .add-row { display: flex; gap: 8px; }
 .add-row input[type="text"] {
   flex: 1;
@@ -290,8 +301,9 @@ header button { white-space: nowrap; }
 .nav-worktree:hover { background: var(--panel); }
 .nav-project-head.selected,
 .nav-worktree.selected { background: var(--panel); border: 1px solid var(--accent); padding: 5px 7px; }
+.nav-worktree.selected { padding-left: 23px; }
 .nav-worktrees { margin-left: 16px; }
-.nav-worktree { font-size: 13px; }
+.nav-worktree { font-size: 13px; padding-left: 24px; }
 .nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .caret {
   color: var(--muted);
@@ -310,7 +322,16 @@ header button { white-space: nowrap; }
 }
 .dot.on { background: var(--green); }
 
-/* Main pane: selected worktree detail */
+/* Main pane: selected worktree detail. The persistent #selectionView container
+   gets a card treatment so its controls read as an anchored panel, not floating
+   text. #terminals stays a sibling with its own framing. */
+#selectionView {
+  max-width: 880px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px 18px;
+}
 .detail-head {
   display: flex;
   flex-wrap: wrap;
