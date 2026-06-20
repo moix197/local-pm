@@ -6,6 +6,7 @@ import {
   AuthError,
 } from './api.js';
 import { signalAuthError } from './app-events.js';
+import { selected, setSelected } from './selection.js';
 
 function setAddError(msg) {
   document.getElementById('addError').textContent = msg ?? '';
@@ -320,4 +321,16 @@ export function openEditForm(container, project) {
   if (openEditRoot === project.root) { closeEditForm(container); return; }
   openEditRoot = project.root;
   renderEditForm(container, project);
+}
+
+// Confirm + DELETE the project, then clear the selection if it pointed at this
+// project (its overview is about to vanish) and re-render. Selection state is
+// cleared directly via selection.js (a leaf — no import cycle).
+export async function removeProject(project) {
+  if (!confirm('Remove project ' + project.name + '?')) return;
+  const ok = await apiSendChecked('DELETE', '/api/projects', { root: project.root }, 'remove project');
+  if (!ok) return;
+  if (selected && selected.type === 'project' && selected.path === project.name) setSelected(null);
+  if (openEditRoot === project.root) openEditRoot = null;
+  refreshAfterMutation();
 }

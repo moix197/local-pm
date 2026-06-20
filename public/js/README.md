@@ -10,8 +10,8 @@ Native ESM, no build step. Served by `serveStatic` from `src/server.js` under
 | `grouping.js` | Pure helpers: `groupByProject`, `runningPaths`, `lanUrlForPort`. Unit-tested. |
 | `console-panel.js` | Lazy console log polling: `openConsoles`, `refreshConsole`, `toggleConsole`, `makeConsolePanel`. |
 | `terminals.js` | xterm terminal-group lifecycle (open/connect/activate/close); imports only `api.js`. |
-| `add-project.js` | Add/browse/setup + edit-project flows; `openEditRoot` state. |
+| `add-project.js` | Add/browse/setup + edit-project flows; `openEditRoot` state; `removeProject` (DELETE+confirm, clears selection via `selection.js`). |
 | `selection.js` | Pure-ish sidebar selection/collapse state: `selected`, `collapsedProjects`, `selectItem`/`isSelected`/`toggleProjectCollapse`, and pure `resolveSelection`. Unit-tested. |
 | `sidebar.js` | Left nav tree: `renderSidebar` + collapsible project rows + worktree rows + green status dots. Imports `selection.js` + `grouping.js`. |
-| `main-pane.js` | Main pane for the selected item: `renderMain` (owns the three persistence invariants), `renderWorktreeView`, `updateTerminalVisibility`, plus control helpers moved from the old `views-legacy.js`. |
+| `main-pane.js` | Main pane for the selected item: `renderMain` branches on selection (worktree view / project overview / empty), owns the three persistence invariants, `renderWorktreeView`, `renderProjectView` (header + dot + Edit/Remove + clickable worktree rows), `updateTerminalVisibility`, plus control helpers moved from the old `views-legacy.js`. |
 | `main.js` | Bootstrap: registers `app-events` callbacks, login wiring, `render` (resolve→sidebar→main→terminals), `tick`/`startPolling`, top-bar + DOM listeners. |

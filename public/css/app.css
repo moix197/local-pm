@@ -351,3 +351,8 @@ header button { white-space: nowrap; }
 }
 .shell-buttons { display: flex; gap: 8px; }
 .detail-empty { color: var(--muted); padding: 24px 0; }
+
+/* Project overview: compact, clickable worktree summary rows. */
+.row.link { cursor: pointer; }
+.row.link:hover { border-color: var(--accent); }
+.row.link:active { background: #1c2128; }

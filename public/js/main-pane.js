@@ -7,10 +7,18 @@
 //      form is reseeded across the poll.
 // Shared control helpers were MOVED VERBATIM from views-legacy.js.
 import { post, projectsByName } from './api.js';
-import { lanUrlForPort } from './grouping.js';
+import { lanUrlForPort, runningPaths } from './grouping.js';
 import { openConsoles, toggleConsole, makeConsolePanel } from './console-panel.js';
 import { openTerminal } from './terminals.js';
-import { getOpenEditRoot, setOpenEditRoot } from './add-project.js';
+import {
+  getOpenEditRoot,
+  setOpenEditRoot,
+  captureEditValues,
+  renderEditForm,
+  openEditForm,
+  removeProject,
+} from './add-project.js';
+import { selectItem } from './selection.js';
 
 export { makeConsolePanel };
 
@@ -173,6 +181,78 @@ export function renderWorktreeView(container, state, selected, busy, savedConsol
   }
 }
 
+// --- Project overview view ----------------------------------------------
+
+// Compact worktree summary row: branch + status, click drills into the
+// worktree view via selection.js.
+function makeProjectWorktreeRow(w, running) {
+  const row = document.createElement('div');
+  row.className = 'row link';
+  const branch = document.createElement('span');
+  branch.className = 'branch';
+  branch.textContent = w.branch ?? w.path;
+  row.appendChild(branch);
+  const status = document.createElement('span');
+  const isRunning = running.has(w.path);
+  status.className = isRunning ? 'running' : 'devcmd';
+  status.textContent = isRunning ? '● running' : 'stopped';
+  row.appendChild(status);
+  const path = document.createElement('span');
+  path.className = 'path';
+  path.title = w.path;
+  path.textContent = w.path;
+  row.appendChild(path);
+  row.onclick = () => selectItem({ type: 'worktree', path: w.path });
+  return row;
+}
+
+// Project header: name + status dot + Edit/Remove icons. Edit/Remove wiring
+// reuses add-project.js (openEditForm/removeProject) — the DELETE+confirm logic
+// is NOT duplicated here.
+function makeProjectHead(container, project, projectName, anyRunning) {
+  const head = document.createElement('div');
+  head.className = 'detail-head';
+  const dot = document.createElement('span');
+  dot.className = 'dot' + (anyRunning ? ' on' : '');
+  head.appendChild(dot);
+  const name = document.createElement('span');
+  name.className = 'detail-branch';
+  name.textContent = projectName;
+  head.appendChild(name);
+  if (!project) return head;
+  const icons = document.createElement('span');
+  icons.className = 'row-icons';
+  icons.style.marginLeft = 'auto';
+  const edit = document.createElement('button');
+  edit.className = 'icon';
+  edit.title = 'Edit project';
+  edit.textContent = '✎';
+  edit.onclick = () => openEditForm(container, project);
+  const remove = document.createElement('button');
+  remove.className = 'icon remove';
+  remove.title = 'Remove project';
+  remove.textContent = '×';
+  remove.onclick = () => removeProject(project);
+  icons.append(edit, remove);
+  head.appendChild(icons);
+  return head;
+}
+
+function renderProjectView(container, state, selected, editSeed) {
+  const projectName = selected.path;
+  const worktrees = (state.worktrees ?? []).filter((w) => w.project === projectName);
+  if (worktrees.length === 0) return;
+  const running = runningPaths(state);
+  const configured = projectsByName.get(projectName);
+  const anyRunning = worktrees.some((w) => running.has(w.path));
+
+  container.appendChild(makeProjectHead(container, configured, projectName, anyRunning));
+  for (const w of worktrees) container.appendChild(makeProjectWorktreeRow(w, running));
+
+  // Re-render an open Edit form so a poll-driven rebuild does not wipe it.
+  if (configured && getOpenEditRoot() === configured.root) renderEditForm(container, configured, editSeed);
+}
+
 export function renderMain(state, selected, busy) {
   const container = document.getElementById('selectionView');
   // Invariant 2: capture open console panels (node + scroll) before the wipe.
@@ -183,10 +263,14 @@ export function renderMain(state, selected, busy) {
   }
   // Invariant 3: capture the focused free-form input value/caret before the wipe.
   const focused = captureFocusedFreeForm(container);
+  // Preserve in-progress edits across the rebuild below (project view only).
+  const editSeed = getOpenEditRoot() ? captureEditValues(container) : null;
 
   container.innerHTML = '';
   if (selected && selected.type === 'worktree') {
     renderWorktreeView(container, state, selected, busy, savedConsoles);
+  } else if (selected && selected.type === 'project') {
+    renderProjectView(container, state, selected, editSeed);
   } else {
     const empty = document.createElement('div');
     empty.className = 'detail-empty';
@@ -196,8 +280,7 @@ export function renderMain(state, selected, busy) {
     container.appendChild(empty);
   }
 
-  // Drop the edit tracker if its form no longer renders (Phase 3 renders the
-  // edit form here and reseeds it across the poll).
+  // Drop the edit tracker if its form no longer renders.
   if (getOpenEditRoot() && !container.querySelector('.setup-form')) setOpenEditRoot(null);
   restoreFocusedFreeForm(container, focused);
 }
