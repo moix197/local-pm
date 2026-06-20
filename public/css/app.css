@@ -259,6 +259,39 @@ header button { white-space: nowrap; }
   padding: 16px 24px;
   min-width: 0;
 }
+/* Hamburger toggle: a mobile affordance, hidden on wide screens where the
+   sidebar is always visible. The backdrop only renders inside the mobile
+   drawer media query below. */
+.sidebar-toggle { padding: 5px 11px; display: none; }
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 768px) {
+  .sidebar-toggle { display: inline-block; }
+  /* Drawer: the sidebar slides over the main pane instead of consuming layout
+     width. Open/closed state is the `.app.sidebar-open` class (set in main.js),
+     which survives the 2s poll because the poll only rebuilds #sidebar's
+     children, never the static .app wrapper. */
+  #sidebar {
+    position: fixed;
+    top: 65px;
+    bottom: 0;
+    left: 0;
+    z-index: 90;
+    width: 280px;
+    max-width: 85vw;
+    background: var(--bg);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  .app.sidebar-open #sidebar { transform: translateX(0); }
+  .app.sidebar-open .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 65px 0 0 0;
+    z-index: 80;
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
 /* The add-project modal reuses the login `.overlay`/`.overlay-panel`; widen the
    panel for the path row + browser/setup and let tall content scroll. */
 #addModal .overlay-panel {

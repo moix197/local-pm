@@ -67,6 +67,19 @@ async function submitToken() {
   }
 }
 
+// Mobile drawer toggle. State lives as the `sidebar-open` class on the static
+// .app wrapper (not the poll-rebuilt #sidebar), so it survives re-renders.
+// sidebar.js closes the drawer on nav selection via the shared CSS class — no
+// import back into main.js, keeping the graph a DAG.
+function setSidebarOpen(open) {
+  document.querySelector('.app').classList.toggle('sidebar-open', open);
+  document.getElementById('sidebarToggle').setAttribute('aria-expanded', String(open));
+}
+
+function toggleSidebar() {
+  setSidebarOpen(!document.querySelector('.app').classList.contains('sidebar-open'));
+}
+
 function renderAuthError() {
   if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
   showLoginOverlay('Session expired — please log in again.');
@@ -115,6 +128,8 @@ function startPolling() {
 registerRender(render);
 registerAuthError(renderAuthError);
 
+document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+document.getElementById('sidebarBackdrop').addEventListener('click', () => setSidebarOpen(false));
 document.getElementById('stopAllBtn').addEventListener('click', () => post('/api/stop'));
 document.getElementById('addProjectBtn').addEventListener('click', openAddModal);
 document.getElementById('addCloseBtn').addEventListener('click', closeAddModal);

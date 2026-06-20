@@ -9,6 +9,15 @@ import {
   collapsedProjects,
 } from './selection.js';
 
+// Close the mobile drawer when a nav item is picked (standard drawer UX: go to
+// the sidebar, choose a thing, it dismisses so the main pane shows). Done via
+// the shared CSS class on the static .app wrapper so we don't import main.js —
+// keeping the import graph a DAG.
+function closeMobileDrawer() {
+  document.querySelector('.app').classList.remove('sidebar-open');
+  document.getElementById('sidebarToggle').setAttribute('aria-expanded', 'false');
+}
+
 function statusDot(on) {
   const dot = document.createElement('span');
   dot.className = 'dot' + (on ? ' on' : '');
@@ -25,7 +34,7 @@ function makeNavWorktree(w, running) {
   label.className = 'nav-label';
   label.textContent = w.branch ?? w.path;
   row.appendChild(label);
-  row.onclick = () => selectItem(item);
+  row.onclick = () => { selectItem(item); closeMobileDrawer(); };
   return row;
 }
 
@@ -55,6 +64,7 @@ function makeNavProject(project, worktrees, running) {
   head.onclick = () => {
     selectItem(item);
     toggleProjectCollapse(project);
+    closeMobileDrawer();
   };
   wrap.appendChild(head);
 
