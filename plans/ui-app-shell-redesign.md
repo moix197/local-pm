@@ -304,21 +304,21 @@ Verified manually.
 **Verification:**
 
 - [x] `pnpm test` still passes. (196/196)
-- [ ] Clicking a project shows its worktree list + status dot + Edit/Remove (also for a project with a single bare/root worktree).
-- [ ] Clicking a worktree row (in overview or sidebar) drills into the worktree view.
-- [ ] Edit form opens, edits persist across a poll, Save updates the project; Remove deletes it and the main pane falls back to a sensible selection/empty state (and if the removed project had a running server, no orphaned terminal group or dot lingers).
+- [x] Clicking a project shows its worktree list + status dot + Edit/Remove (also for a project with a single bare/root worktree).
+- [x] Clicking a worktree row (in overview or sidebar) drills into the worktree view.
+- [x] Edit form opens, edits persist across a poll, Save updates the project; Remove deletes it and the main pane falls back to a sensible selection/empty state (and if the removed project had a running server, no orphaned terminal group or dot lingers).
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes ticked in the plan file
+- [x] All Steps and Verification checkboxes ticked in the plan file
 - [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn (in-session execution; handoff via subagent)
 - [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session (n/a — in-session execution)
 - [x] Code-reviewer agent has verified this phase (green; 1 non-blocking nit — unreachable zero-worktree blank-pane guard at main-pane.js:218)
-- [x] Reviewer-driven changes reflected back into this plan file
+- [x] Reviewer-driven changes reflected back into this plan file (nit fixed: zero-worktree project now renders header — main-pane.js)
 - [x] Documentation updated (public/js/README.md module map)
-- [ ] Orchestrator (user) has verified and approved this phase
+- [x] Orchestrator (user) has verified and approved this phase
 - [x] Changes committed: `feat(ui): project overview view with edit/remove`
-- [ ] Phase marked complete
+- [x] Phase marked complete
 
 ---
 
