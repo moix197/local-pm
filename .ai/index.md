@@ -9,7 +9,7 @@ anywhere real.
 
 | Module | Responsibility (one line) | Path | Related docs |
 | ------ | ------------------------- | ---- | ------------ |
-| server | HTTP + WS entry: routes `/` + `/api/*`, guards `/api/*` with bearer auth | `src/server.js` | [node-builtins-only](decisions/node-builtins-only.md) |
+| server | HTTP + WS entry: routes `/`, static `/vendor//js//css/*`, `/api/*`; guards only `/api/*` with bearer auth | `src/server.js` | [node-builtins-only](decisions/node-builtins-only.md) |
 | runner | Per-target dev-server + ad-hoc command lifecycle (start/stop, install, logs) | `src/runner.js` | [windows-process-tree-kill](decisions/windows-process-tree-kill.md) |
 | token | Generates/loads `token.local`; timing-safe bearer check for `/api/*` | `src/token.js` | [lan-bearer-token-auth](decisions/lan-bearer-token-auth.md) |
 | config | Project store: atomic `projects.json` read/write + PATCH whitelist | `src/config.js` | — |
@@ -19,7 +19,7 @@ anywhere real.
 | pty | In-memory terminal sessions: spawn shell/claude PTY, scrollback ring, attach/detach, idle reaper | `src/pty.js` | — |
 | ws | WS upgrade auth (query-token + origin allowlist) and terminal frame routing to pty sessions | `src/ws.js` | — |
 | mcp | Standalone MCP stdio adapter: 4 tools forwarding to daemon `/api/*`; zero state | `mcp/index.js` | [standalone-mcp-package](decisions/standalone-mcp-package.md) |
-| dashboard | Single-file browser UI: 2s state poll + WS xterm terminals | `public/index.html` | — |
+| dashboard | Modular native-ESM browser UI (thin `index.html` shell + `js/*` + `css/`): 2s state poll, sidebar nav, selection-driven main pane, WS xterm terminals. Per-module map in `public/js/README.md`. | `public/index.html`, `public/js/`, `public/css/` | [frontend-native-esm-modules](decisions/frontend-native-esm-modules.md) |
 | netinfo | Resolves the machine's primary external LAN IPv4 (fallback `127.0.0.1`) | `src/netinfo.js` | — |
 | browse | Host folder browser for the UI: lists subdirs, flags project-looking folders, dir guard | `src/browse.js` | — |
 

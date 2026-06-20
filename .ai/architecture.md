@@ -9,7 +9,11 @@ its rationale* — not API-level detail the code already documents.
 A single daemon process (`src/server.js`) owns three surfaces from one `node:http`
 server: the dashboard (static `public/`), the REST API (`/api/*`), and a WebSocket
 upgrade. No web framework, no build step — Node built-ins plus `node-pty`/`ws` only.
-See [node-builtins-only](decisions/node-builtins-only.md).
+See [node-builtins-only](decisions/node-builtins-only.md). A generic
+`serveStatic(baseDir, urlPrefix)` (realpath/`startsWith` traversal guard, shared
+`STATIC_CONTENT_TYPES` MIME map) serves `/vendor/*`, `/js/*`, and `/css/*` — all
+**before** the `/api/` auth gate, so the frontend's own assets load unauthenticated
+exactly like `/` and the vendored libs.
 
 State lives in process memory inside the service modules (runner's per-path Maps),
 except the project list which persists to `projects.json` via `config`, and the auth
@@ -29,9 +33,16 @@ used over plain `child_process` because terminal programs need a real PTY/ConPTY
 spawn/resize code, so no decision file. `pty` keeps its sessions (`id → session`)
 in process memory only, capped at `MAX_SESSIONS = 10`.
 
-The browser (`public/index.html`) is a single static file that talks to the daemon
-over two channels — a 2s `GET /api/state` + `/api/projects`
-poll for dashboard state, and one WebSocket per terminal tab (xterm.js) for live I/O.
+The browser frontend is **native ESM, no build step** (see
+[frontend-native-esm-modules](decisions/frontend-native-esm-modules.md)): a thin
+`public/index.html` shell loads `public/css/app.css` and `public/js/main.js`, which
+imports the `public/js/*` module tree. `main.js` is the only orchestrator; a leaf
+`app-events.js` holds shared mutable state (`lastState`/`inFlight`) and registerable
+render/auth callback slots so lower modules never import `main.js` back — the import
+graph stays a DAG. Per-module responsibilities live in `public/js/README.md`, not
+here. It talks to the daemon over two channels — a 2s `GET /api/state` +
+`/api/projects` poll for dashboard state, and one WebSocket per terminal tab
+(xterm.js) for live I/O.
 
 `mcp/` is a **standalone package** outside the daemon: its own `package.json`
 (`@modelcontextprotocol/sdk` + `zod`, deps the daemon never pulls in), not a pnpm
