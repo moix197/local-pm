@@ -13,9 +13,10 @@ export function runningPaths(state) {
   return new Set((state.running ?? []).map((r) => r.path));
 }
 
-// Assumes state.lanUrl is a non-null string; only called for running servers
-// (callers guard on anyRunning), so state.lanUrl is always populated here.
+// Normally only called for running servers (callers guard on anyRunning), but
+// returns null defensively if state.lanUrl is unset so a future caller can't throw.
 export function lanUrlForPort(state, port) {
+  if (!state.lanUrl) return null;
   if (port == null) return state.lanUrl;
   return state.lanUrl.replace(/:\d+$/, ':' + port);
 }
