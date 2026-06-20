@@ -63,11 +63,11 @@ Create a git worktree for this plan's branch. Always confirm worktree creation w
 
 **Steps:**
 
-- [ ] Read `.ai/README.md`, `.ai/index.md`, `.ai/architecture.md` and `.claude/skills/sync-knowledge/SKILL.md` to lock the exact shapes to formalize.
-- [ ] In `.ai/README.md`, add a concise "Formats" section defining: (1) router-table columns `Module | Responsibility (one line) | Path | Related docs` (column names match sync-knowledge's index.md description: module → one-line responsibility → path → linked docs); (2) `architecture.md` required headings (`System shape`, `Dependency direction`, `Data flow`) and what each holds in one line; (3) a minimal `decisions/<slug>.md` template that is byte-compatible with sync-knowledge (`# Title`, `**Decision:**`, `**Why:**`, `**Rejected:**`, `**Constraints it creates:**`); (4) a minimal `patterns/<slug>.md` template (Pattern / When / Shape), noting patterns are added only on the 2nd real use.
-- [ ] Update `.ai/index.md` to carry the finalized router-table header with an empty body (preserve the existing "read first" intro and the cross-cutting table).
-- [ ] Update `.ai/architecture.md` to the finalized empty section stubs under the three headings.
-- [ ] Keep everything terse — no restating CLAUDE.md, no speculative format fields.
+- [x] Read `.ai/README.md`, `.ai/index.md`, `.ai/architecture.md` and `.claude/skills/sync-knowledge/SKILL.md` to lock the exact shapes to formalize.
+- [x] In `.ai/README.md`, add a concise "Formats" section defining: (1) router-table columns `Module | Responsibility (one line) | Path | Related docs` (column names match sync-knowledge's index.md description: module → one-line responsibility → path → linked docs); (2) `architecture.md` required headings (`System shape`, `Dependency direction`, `Data flow`) and what each holds in one line; (3) a minimal `decisions/<slug>.md` template that is byte-compatible with sync-knowledge (`# Title`, `**Decision:**`, `**Why:**`, `**Rejected:**`, `**Constraints it creates:**`); (4) a minimal `patterns/<slug>.md` template (Pattern / When / Shape), noting patterns are added only on the 2nd real use.
+- [x] Update `.ai/index.md` to carry the finalized router-table header with an empty body (preserve the existing "read first" intro and the cross-cutting table).
+- [x] Update `.ai/architecture.md` to the finalized empty section stubs under the three headings.
+- [x] Keep everything terse — no restating CLAUDE.md, no speculative format fields.
 
 **Tests:**
 
@@ -75,22 +75,22 @@ No automated tests — justified because: pure README/docs change with explicit 
 
 **Verification:**
 
-- [ ] `.ai/README.md` contains a Formats section that defines all four shapes (router columns, arch headings, decision template, pattern template), and the decision template matches the sync-knowledge field set verbatim.
-- [ ] `.ai/index.md` shows the agreed router-table columns with an empty body and no leftover `_empty_` placeholder.
-- [ ] `.ai/architecture.md` has the three required headings as empty stubs and no leftover placeholder prose.
-- [ ] No content has been written for any subsystem yet (this phase is skeleton-only).
+- [x] `.ai/README.md` contains a Formats section that defines all four shapes (router columns, arch headings, decision template, pattern template), and the decision template matches the sync-knowledge field set verbatim.
+- [x] `.ai/index.md` shows the agreed router-table columns with an empty body and no leftover `_empty_` placeholder.
+- [x] `.ai/architecture.md` has the three required headings as empty stubs and no leftover placeholder prose.
+- [x] No content has been written for any subsystem yet (this phase is skeleton-only).
 
 **Phase review:**
 
-- [ ] All Steps and Verification checkboxes above ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file
-- [ ] Tests for this phase written and passing — or no-tests justification accepted
-- [ ] Documentation updated (this phase IS documentation)
+- [x] All Steps and Verification checkboxes above ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn (code-reviewer ran as subagent under /execute-prd)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session (N/A — reviewer ran as isolated subagent)
+- [x] Code-reviewer agent has verified this phase
+- [x] Any changes made in response to code-reviewer suggestions have been reflected back into this plan file (only cosmetic nits, no changes required)
+- [x] Tests for this phase written and passing — or no-tests justification accepted
+- [x] Documentation updated (this phase IS documentation)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `docs(ai): formalize .ai formats and lay index/architecture skeleton`
+- [x] Changes committed: `docs(ai): formalize .ai formats and lay index/architecture skeleton`
 - [ ] Phase marked complete
 
 ---
