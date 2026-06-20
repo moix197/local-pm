@@ -16,6 +16,12 @@ anywhere real.
 | detect | Classifies a folder as git-wt / docker / plain; sources devCmd from scripts | `src/detect.js` | — |
 | ports | In-memory 3100–3199 port pool (assign/release) + type-dependent env build for spawn | `src/ports.js` | [hybrid-port-models](decisions/hybrid-port-models.md) |
 | worktrees | Enumerates git worktrees per project (porcelain parse) with synthetic-root fallback | `src/worktrees.js` | — |
+| pty | In-memory terminal sessions: spawn shell/claude PTY, scrollback ring, attach/detach, idle reaper | `src/pty.js` | — |
+| ws | WS upgrade auth (query-token + origin allowlist) and terminal frame routing to pty sessions | `src/ws.js` | — |
+| mcp | Standalone MCP stdio adapter: 4 tools forwarding to daemon `/api/*`; zero state | `mcp/index.js` | [standalone-mcp-package](decisions/standalone-mcp-package.md) |
+| dashboard | Single-file browser UI: 2s state poll + WS xterm terminals | `public/index.html` | — |
+| netinfo | Resolves the machine's primary external LAN IPv4 (fallback `127.0.0.1`) | `src/netinfo.js` | — |
+| browse | Host folder browser for the UI: lists subdirs, flags project-looking folders, dir guard | `src/browse.js` | — |
 
 ## Cross-cutting
 

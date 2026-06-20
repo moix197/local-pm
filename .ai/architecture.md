@@ -21,6 +21,24 @@ is persisted, so the pool resets on daemon restart. Allocations survive a restar
 only incidentally: `assignPort` cross-checks running servers and OS-bound ports, so
 a still-running dev server's port is re-skipped even after the map is lost.
 
+Interactive terminals are a second surface of the same daemon: `ws` attaches a
+WebSocket server (`noServer`) to the same `node:http` server and routes frames to
+`pty`, which spawns real shells (pwsh/cmd) or `claude` via `node-pty`. `node-pty` is
+used over plain `child_process` because terminal programs need a real PTY/ConPTY
+(TTY semantics, resize, ANSI) that pipes can't provide — recoverable from the
+spawn/resize code, so no decision file. `pty` keeps its sessions (`id → session`)
+in process memory only, capped at `MAX_SESSIONS = 10`.
+
+The browser (`public/index.html`) is a single static file with no build step: it
+talks to the daemon over two channels — a 2s `GET /api/state` + `/api/projects`
+poll for dashboard state, and one WebSocket per terminal tab (xterm.js) for live I/O.
+
+`mcp/` is a **standalone package** outside the daemon: its own `package.json`
+(`@modelcontextprotocol/sdk` + `zod`, deps the daemon never pulls in), not a pnpm
+workspace member, no shared code. It holds zero state and forwards every tool call
+to the daemon's `/api/*` over HTTP, so the daemon stays the single source of truth.
+See [standalone-mcp-package](decisions/standalone-mcp-package.md).
+
 ## Dependency direction
 
 One-way: entry → services → store. `server` imports the services
@@ -59,6 +77,27 @@ target carries the project's `type` (git-wt / docker / plain, from `detect`).
 
 `assignPort` reserves the first slot that is neither in the allocation map nor bound
 on the OS; `releasePort(path)` frees the path's port and any `${path}:*` composite keys.
+
+Terminal lifecycle (decouples the PTY session from the WebSocket so a closed tab
+doesn't kill the shell): WS upgrade → `ws.authorizeUpgrade` checks the query-string
+`token` (timing-safe) and, when an `Origin` header is present, an allowlist built
+from localhost/127.0.0.1/the LAN IPv4 (`netinfo`) → on a known `sessionId`,
+`pty.attachClient` (reattach); otherwise `pty.spawnSession` (new). At spawn, `pty`
+wires `onData` **once**: every chunk is appended to the session's scrollback ring
+(evicted from the front past `SCROLLBACK_MAX_BYTES = 512000` / `SCROLLBACK_MAX_CHUNKS
+= 5000`) and sent live only while a client is attached. `attachClient` replays the
+full scrollback to the new socket in order, then sets it as the live client
+(superseding any prior socket). `detachClient` (on WS close) just nulls the client
+and stamps `idleAt` — the PTY keeps running. A 60s reaper kills sessions idle (no
+client) longer than `IDLE_TIMEOUT_MS` (env `LOCAL_PM_IDLE_TIMEOUT_MINUTES`, default
+30 min). This is what lets a browser reattach to a still-running terminal and see
+its backlog.
+
+MCP flow: an MCP client invokes a tool (`list_worktrees`, `status`, `start_server`,
+`stop_server`) over stdio → `mcp/index.js` resolves the bearer token (env
+`LOCAL_PM_TOKEN`, else `token.local`) → `fetch`es the matching daemon `/api/*`
+endpoint → returns the JSON; any failure is wrapped as an MCP `isError` result so a
+down daemon or bad token never crashes the adapter.
 
 > Update via the `sync-knowledge` skill when an architectural boundary, package,
 > or flow is introduced or changed.
