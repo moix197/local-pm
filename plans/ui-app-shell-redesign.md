@@ -195,12 +195,12 @@ files. `node --test` passes for extracted pure helpers.
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
 - [x] Code-reviewer agent has verified this phase
-- [ ] Reviewer-driven changes reflected back into this plan file
+- [x] Reviewer-driven changes reflected back into this plan file (test script fixed to run both `public/js` + `src` suites: `node --test "public/js/**/*.test.js" "src/**/*.test.js"` → 187 tests)
 - [x] Tests written and passing
 - [x] Documentation updated (see Documentation section)
-- [ ] Orchestrator (user) has verified and approved this phase
+- [x] Orchestrator (user) has verified and approved this phase
 - [x] Changes committed: `refactor(ui): split index.html into ESM modules, add static serving`
-- [ ] Phase marked complete
+- [x] Phase marked complete
 
 ---
 
