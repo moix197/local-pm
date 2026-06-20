@@ -256,13 +256,48 @@ ws://localhost:7420/ws/terminal?token=<token>&worktreePath=<path>&kind=<kind>&co
 | `rows` | terminal height (1–500) | required |
 | `sessionId` | UUID keying the session; a known id **reattaches** (replays scrollback), an unknown id **spawns** a new session | required (client-generated) |
 
-### Authentication model
+### Detach / reattach and scrollback
+
+Closing a tab (or losing the connection) does **not** kill the PTY — the WebSocket
+detaches but the server-side session keeps running and keeps buffering output.
+Reconnecting with the same `sessionId` **reattaches**: the recorded scrollback is
+replayed into the fresh xterm, then live output resumes. This lets you close the
+browser on a long-running `claude` session and pick it up later.
+
+Each session keeps a **scrollback ring buffer** capped at **512 KB (≈ 500 000 bytes)
+or 5000 chunks**, whichever is hit first; the oldest chunks are evicted past the cap.
+Chunks are stored raw (not line-split) so ANSI escape-sequence context survives replay.
+Live sends are dropped when the socket's `bufferedAmount` exceeds the 1 MB high-water
+mark (the chunk is still buffered, so a slow client catches up on reattach) — this
+bounds server memory regardless of how fast a process produces output.
+
+### Idle reaper and `LOCAL_PM_IDLE_TIMEOUT_MINUTES`
+
+A reaper runs every 60 s and kills any session that has been **detached** (no client
+attached) longer than the idle timeout, then removes it from the session map (logged as
+`[pty] reaped idle session <id>`). The timeout defaults to **30 minutes** and is
+overridable via `LOCAL_PM_IDLE_TIMEOUT_MINUTES`. On `SIGINT`/`SIGTERM` a `shutdown()`
+hook kills all live sessions and clears the reaper interval.
+
+### Authentication model and security posture
 
 The token is passed as a `?token=` query parameter (not a header, since the browser
 `WebSocket` API does not support custom headers). The server validates it with
 `crypto.timingSafeEqual` before completing the HTTP upgrade. Unauthorised upgrades
 receive `HTTP/1.1 401 Unauthorized` and the socket is destroyed — `wss.handleUpgrade`
-is never called.
+is never called, so no PTY is ever spawned for an unauthorised request.
+
+A second, defence-in-depth check is an **Origin allowlist** (anti-CSWSH): a present
+`Origin` header must exactly match `http://localhost:<port>`, `http://127.0.0.1:<port>`,
+or `http://<LAN-IPv4>:<port>`; a non-browser client with no `Origin` (e.g. a test
+harness) is allowed. Any other present origin is rejected.
+
+> **`?token=` in the URL is accepted only because this is a LAN-only, single-user tool.**
+> A token in a query string can leak via access logs, browser history, and `Referer`
+> headers. Two cheap mitigations apply: the server **never logs the full request URL**
+> (only the pathname + outcome), and it relies on the LAN-bind / single-token threat
+> model. The real fix — short-lived one-time `?ticket=` auth + WSS — is the named
+> ROADMAP follow-up and is a single-function change in `authorizeUpgrade`.
 
 ### Shell detection and `LOCAL_PM_SHELL`
 
@@ -274,15 +309,18 @@ The PTY shell is detected once at startup:
 
 ### Session limit
 
-A maximum of 10 concurrent PTY sessions is enforced. Attempts beyond this receive
-`ws.close(4429, 'session cap reached')`.
+A maximum of **10** concurrent PTY sessions is enforced. Attempts beyond this are
+rejected with close code `4429`.
 
 ### WebSocket close codes
 
+Auth failure is **not** a close code — it is a raw `HTTP/1.1 401 Unauthorized` emitted
+**before** the handshake completes (the socket is destroyed, no WS frames are sent).
+Once the connection is open, the server may close it with one of:
+
 | Code | Meaning |
 |---|---|
-| `4401` | Unauthorized (returned as HTTP 401 before upgrade) |
-| `4403` | Session rejected — unknown worktree path or invalid kind |
+| `4403` | Session rejected — malformed URL, unknown worktree path, or invalid `kind` |
 | `4429` | Session cap (10) reached |
 
 ### Control frames
@@ -294,7 +332,36 @@ PTY:
 { "resize": { "cols": 120, "rows": 40 } }
 ```
 
-Any other message is treated as PTY stdin and forwarded verbatim.
+Any other message is treated as PTY stdin and forwarded verbatim. `cols`/`rows` are
+clamped to `[1, 500]` and ignored if not finite positive numbers.
+
+### Implementation notes
+
+- **Vendored xterm.js — no CDN, no build step.** The xterm UMD bundle, its CSS, and
+  the fit addon are committed to `public/vendor/` and served by a path-traversal-safe
+  `/vendor/` static route. There is no bundler and nothing is fetched from a CDN at
+  runtime, preserving the project's no-build-step invariant.
+- **Two runtime dependencies — `node-pty` and `ws`.** These are the only external
+  runtime deps the dashboard adds, a deliberate exception to the project's
+  build-our-own-before-installing rule:
+  - **`node-pty`** — a real PTY needs native OS APIs (`CreatePseudoConsole` / ConPTY on
+    Windows, `forkpty` on POSIX). Reimplementing that in pure JS is not feasible;
+    `node-pty` is the canonical N-API wrapper. It ships a prebuilt win32-x64 binary, so
+    no compiler toolchain is required for the supported platform.
+  - **`ws`** — a spec-compliant WebSocket server (RFC 6455 handshake, masking,
+    fragmentation, ping/pong) is impractical to hand-roll; `ws` is minimal, dependency-
+    free, widely audited, and the standard way to attach WebSockets to a `node:http`
+    server.
+
+  (`xterm.js` is **vendored**, not installed as a runtime dependency, so it does not
+  count against the runtime-dep footprint.)
+- **Windows ConPTY teardown caveat.** On Windows, `node-pty` uses ConPTY. Killing a
+  session terminates the shell, but **grandchild processes** (e.g. anything a `claude`
+  session spawned) may not be reliably reaped — orphaned ConPTY/child processes can
+  linger. Additionally, each reap can emit a non-fatal `Error: AttachConsole failed`
+  from node-pty's forked ConPTY helper; the server catches it via an `uncaughtException`
+  guard and stays alive. A tree-kill (`taskkill /T /F`) remediation is deferred to the
+  remote-hardening follow-up.
 
 ## Security caveat
 

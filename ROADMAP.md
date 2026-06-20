@@ -116,14 +116,31 @@ in one worktree never blocks another.
 
 ---
 
-## PRD 2 — Interactive terminals  *(next planned)*
+## PRD 2 — Interactive terminals  *(done)*
 
-Replace the poll-based lazy console with true interactive terminals: `node-pty` for a
-real PTY per worktree, a WebSocket channel for bidirectional streaming, and `xterm.js`
-in the browser. The Phase-8 lazy-fetch log API (`GET /api/logs?path=`) was designed to
-be forward-compatible with this upgrade — the fetch seam is marked in the UI code.
-Enables interactive commands (prompts, REPLs, full TTY programs) that the current
-fire-and-read command model cannot support.
+Replaced the poll-based lazy console with true interactive terminals: `node-pty` for a
+real PTY per worktree, a WebSocket channel for bidirectional streaming, and vendored
+`xterm.js` in the browser (no CDN, no build step). Each worktree hosts multiple tabbed
+terminals — a shell and/or a one-click **＋ Claude** quick-action — that survive tab
+closes: WS detach keeps the PTY alive, reattach with the same `sessionId` replays a
+512 KB/5000-chunk scrollback ring, and an idle reaper (default 30 min, override via
+`LOCAL_PM_IDLE_TIMEOUT_MINUTES`) kills abandoned sessions. The WS upgrade is gated by
+the dashboard token (`?token=`, compared with `timingSafeEqual` before `handleUpgrade`)
+plus an Origin allowlist (anti-CSWSH); cwd is a validated registry path and `kind`
+selects from a fixed command table. Shell is auto-detected (`pwsh.exe` → `cmd.exe`,
+override via `LOCAL_PM_SHELL`). Enables interactive commands (prompts, REPLs, full TTY
+programs) the fire-and-read command model could not support.
+
+### Follow-up — Remote access hardening *(planned)*
+
+Short-lived ticket-based WS auth + WSS (Cloudflare Tunnel). The current `?token=` query
+approach is suitable for LAN-only use but leaks the token via logs/history/`Referer`.
+For remote exposure: add an authed `POST /api/terminal/ticket` that issues a one-time,
+short-lived ticket, and have the WS connect with `?ticket=` instead. `authorizeUpgrade`
+in `src/ws.js` is the **only** function that needs to change (read `?ticket=`, look it
+up in a consume-once map); nothing else in `ws.js`/`pty.js` is affected. Pair with WSS
+so the ticket is never sent in cleartext. Tracks alongside the existing HTTPS/hardening
+deferred item below.
 
 ---
 
