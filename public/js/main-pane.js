@@ -241,7 +241,6 @@ function makeProjectHead(container, project, projectName, anyRunning) {
 function renderProjectView(container, state, selected, editSeed) {
   const projectName = selected.path;
   const worktrees = (state.worktrees ?? []).filter((w) => w.project === projectName);
-  if (worktrees.length === 0) return;
   const running = runningPaths(state);
   const configured = projectsByName.get(projectName);
   const anyRunning = worktrees.some((w) => running.has(w.path));
