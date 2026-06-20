@@ -23,8 +23,10 @@ import { attachWebSocket } from './ws.js';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const indexHtml = path.join(repoRoot, 'public', 'index.html');
 const vendorDir = path.join(repoRoot, 'public', 'vendor');
+const jsDir = path.join(repoRoot, 'public', 'js');
+const cssDir = path.join(repoRoot, 'public', 'css');
 
-const VENDOR_CONTENT_TYPES = {
+const STATIC_CONTENT_TYPES = {
   '.js': 'application/javascript',
   '.css': 'text/css',
 };
@@ -59,12 +61,14 @@ function serveIndex(res) {
   res.end(html);
 }
 
-// Serve vendored static assets from public/vendor/. The decoded path is resolved
-// and asserted to stay inside vendorDir (traversal guard) before any file read.
-function serveVendor(url, res) {
-  const rel = decodeURIComponent(url.pathname.slice('/vendor/'.length));
-  const resolved = path.resolve(vendorDir, rel);
-  if (!resolved.startsWith(vendorDir + path.sep)) {
+// Serve static assets from a base dir under a url prefix. The decoded path is
+// resolved and asserted to stay inside baseDir (traversal guard) before any file
+// read. Used for vendored assets (public/vendor/) and the modular frontend
+// (public/js/, public/css/).
+function serveStatic(baseDir, urlPrefix, url, res) {
+  const rel = decodeURIComponent(url.pathname.slice(urlPrefix.length));
+  const resolved = path.resolve(baseDir, rel);
+  if (!resolved.startsWith(baseDir + path.sep)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     return res.end('Forbidden');
   }
@@ -78,7 +82,7 @@ function serveVendor(url, res) {
     }
     throw err;
   }
-  const type = VENDOR_CONTENT_TYPES[path.extname(resolved)] ?? 'application/octet-stream';
+  const type = STATIC_CONTENT_TYPES[path.extname(resolved)] ?? 'application/octet-stream';
   res.writeHead(200, { 'Content-Type': type });
   res.end(body);
 }
@@ -223,7 +227,9 @@ async function route(req, res) {
     return sendJson(res, 401, { error: 'Unauthorized' });
   }
   if (method === 'GET' && url.pathname === '/') return serveIndex(res);
-  if (method === 'GET' && url.pathname.startsWith('/vendor/')) return serveVendor(url, res);
+  if (method === 'GET' && url.pathname.startsWith('/vendor/')) return serveStatic(vendorDir, '/vendor/', url, res);
+  if (method === 'GET' && url.pathname.startsWith('/js/')) return serveStatic(jsDir, '/js/', url, res);
+  if (method === 'GET' && url.pathname.startsWith('/css/')) return serveStatic(cssDir, '/css/', url, res);
   if (method === 'GET' && url.pathname === '/api/state') return handleState(res);
   if (method === 'GET' && url.pathname === '/api/logs') return handleLogs(url, res);
   if (method === 'GET' && url.pathname === '/api/browse') return handleBrowse(url, res);

@@ -3,7 +3,29 @@
 Lightweight local web dashboard to control a dev server per git worktree,
 accessible over the LAN. Multiple servers run **concurrently**, each on its own
 port with its own log console. No web framework, only Node built-ins. Frontend is a
-single static HTML page with vanilla JS — no build step.
+thin static HTML shell plus native-ESM modules (`public/js/*`) and one stylesheet
+(`public/css/app.css`) — no build step.
+
+## Frontend module map
+
+The page is `public/index.html` (a thin shell that only holds the static
+containers and loads `/js/main.js`). The logic lives in native ESM modules under
+`public/js/` — see [`public/js/README.md`](public/js/README.md) for the per-module
+breakdown. The import graph is a DAG (no module imports `main.js`; the
+`app-events.js` leaf holds the shared render/auth callbacks).
+
+These assets are served by a generic, path-traversal-safe `serveStatic(baseDir,
+urlPrefix)` handler in `src/server.js`, wired to three unauthenticated `GET`
+routes (alongside `GET /`):
+
+| Route | Base dir | Content type |
+|---|---|---|
+| `GET /vendor/*` | `public/vendor` | per extension (`.js`, `.css`) |
+| `GET /js/*` | `public/js` | `application/javascript` |
+| `GET /css/*` | `public/css` | `text/css` |
+
+Each decoded path is resolved and asserted to stay inside its base dir (a `../`
+escape — including `%2e%2e` encoded — returns `403`; a missing file returns `404`).
 
 ## Works with git-wt
 
