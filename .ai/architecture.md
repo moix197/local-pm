@@ -44,6 +44,18 @@ here. It talks to the daemon over two channels — a 2s `GET /api/state` +
 `/api/projects` poll for dashboard state, and one WebSocket per terminal tab
 (xterm.js) for live I/O.
 
+Each terminal group carries a persistent bottom input toolbar (`terminals.js`,
+built once per group, anchored as the group's last child so the poll's wipe and
+new panes never displace it): fixed quick-key buttons that send raw byte
+sequences (Enter/Esc/arrows/Tab/Ctrl+C/literals) to the active session's
+WebSocket, plus tappable text-macro chips. Macros are a frontend-only store — a
+leaf `term-macros.js` does `localStorage` CRUD for a global `{label, text}` list,
+persisted per-device with no daemon involvement (see
+[terminal-macros-localstorage](decisions/terminal-macros-localstorage.md)). On
+narrow viewports (≤768px) the left nav becomes a collapsible drawer toggled by a
+class on the static `.app` wrapper, so the 2s poll's innerHTML wipe preserves the
+open/closed state.
+
 `mcp/` is a **standalone package** outside the daemon: its own `package.json`
 (`@modelcontextprotocol/sdk` + `zod`, deps the daemon never pulls in), not a pnpm
 workspace member, no shared code. It holds zero state and forwards every tool call
