@@ -54,7 +54,10 @@ persisted per-device with no daemon involvement (see
 [terminal-macros-localstorage](decisions/terminal-macros-localstorage.md)). On
 narrow viewports (≤768px) the left nav becomes a collapsible drawer toggled by a
 class on the static `.app` wrapper, so the 2s poll's innerHTML wipe preserves the
-open/closed state.
+open/closed state. A per-group full-screen "focus mode" (⛶) toggles classes on
+`<body>` + the persistent group root to fill the viewport (`100dvh`) and lock page
+scroll for mobile terminal use; it refits the active session (never disposes it)
+and auto-releases on worktree switch or last-tab close to avoid a scroll-lock trap.
 
 `mcp/` is a **standalone package** outside the daemon: its own `package.json`
 (`@modelcontextprotocol/sdk` + `zod`, deps the daemon never pulls in), not a pnpm
