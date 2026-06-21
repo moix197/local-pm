@@ -9,7 +9,8 @@ Native ESM, no build step. Served by `serveStatic` from `src/server.js` under
 | `api.js` | Auth/token storage, `fetchState`/`fetchProjects`, `post`/`apiSend`/`apiSendChecked`/`refreshAfterMutation`, `projectsByName`/`projectsByRoot`. Calls `app-events.js` callbacks, never `main.js`. |
 | `grouping.js` | Pure helpers: `groupByProject`, `runningPaths`, `lanUrlForPort`. Unit-tested. |
 | `console-panel.js` | Lazy console log polling: `openConsoles`, `refreshConsole`, `toggleConsole`, `makeConsolePanel`. |
-| `terminals.js` | xterm terminal-group lifecycle (open/connect/activate/close); imports only `api.js`. |
+| `terminals.js` | xterm terminal-group lifecycle (open/connect/activate/close) + per-group mobile input toolbar (quick keys + macro chips); imports `api.js` + `term-macros.js`. |
+| `term-macros.js` | Leaf: localStorage CRUD for global user text macros (`loadMacros`/`addMacro`/`removeMacro`). No DOM, no app imports. |
 | `add-project.js` | Add/browse/setup + edit-project flows; `openAddModal`/`closeAddModal` (the top-bar add-project `.overlay` modal); `openEditRoot` state; `removeProject` (DELETE+confirm, clears selection via `selection.js`). |
 | `selection.js` | Pure-ish sidebar selection/collapse state: `selected`, `collapsedProjects`, `selectItem`/`isSelected`/`toggleProjectCollapse`, and pure `resolveSelection`. Unit-tested. |
 | `sidebar.js` | Left nav tree: `renderSidebar` + collapsible project rows + worktree rows + green status dots. Imports `selection.js` + `grouping.js`. |

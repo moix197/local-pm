@@ -238,6 +238,30 @@ pre {
 .terminal-pane.hidden { display: none; }
 .terminal-pane .terminal-body { height: 500px; }
 
+/* Mobile input toolbar, anchored at the bottom of each group. Quick keys are
+   mono/fixed; macro chips live outside .terminal-tabs so they carry their own
+   chip styling (the .tab rules above are scoped to .terminal-tabs). */
+.terminal-toolbar { display: flex; flex-direction: column; gap: 6px; padding: 6px 9px; background: #161b22; border-top: 1px solid var(--border); }
+.term-quickkeys, .term-macros-strip { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.terminal-toolbar .qkey {
+  min-height: 32px; padding: 4px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: #21262d; color: var(--text);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer;
+}
+.terminal-toolbar .qkey:hover { border-color: var(--accent); }
+.terminal-toolbar .qkey.add-macro { color: var(--muted); }
+.term-macros-strip .term-macro {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 32px; padding: 4px 8px; border-radius: 6px;
+  border: 1px solid var(--border); background: #21262d; color: var(--muted);
+  font-size: 12px; cursor: pointer;
+}
+.term-macros-strip .term-macro .term-macro-close {
+  background: none; border: none; padding: 0; font: inherit; cursor: pointer;
+  color: var(--muted);
+}
+.term-macros-strip .term-macro .term-macro-close:hover { color: var(--red); }
+
 /* --- App shell (Phase 2) --------------------------------------------- */
 .hidden { display: none; }
 header button { white-space: nowrap; }
