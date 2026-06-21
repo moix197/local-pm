@@ -294,6 +294,16 @@ export function updateTerminalVisibility(selectedPath) {
   for (const group of container.children) {
     const label = group.querySelector('.group-label');
     const groupPath = label ? label.title : null;
-    group.style.display = groupPath === selectedPath ? '' : 'none';
+    const visible = groupPath === selectedPath;
+    group.style.display = visible ? '' : 'none';
+    // A focused group that is being hidden (worktree switch) must release the
+    // full-screen lock, else the page stays scroll-locked behind a blank pane.
+    // The toggle button's aria-pressed is reset on next focus toggle.
+    if (!visible && group.classList.contains('terminal-focused')) {
+      group.classList.remove('terminal-focused');
+      document.body.classList.remove('terminal-focus');
+      const btn = group.querySelector('.term-focus-toggle');
+      if (btn) btn.setAttribute('aria-pressed', 'false');
+    }
   }
 }

@@ -44,6 +44,31 @@ function sendToActive(group, data) {
   }
 }
 
+// Refit the group's active session to its current pane size and push the new
+// cols/rows to the PTY — same contract as the per-session ResizeObserver. Called
+// after a layout change (focus toggle) where the observer may not fire.
+function refitActive(group) {
+  const sess = group.sessions.get(group.activeId);
+  if (!sess) return;
+  sess.fitAddon.fit();
+  const cols = clampDim(sess.terminal.cols);
+  const rows = clampDim(sess.terminal.rows);
+  if (sess.ws && sess.ws.readyState === WebSocket.OPEN) {
+    sess.ws.send(JSON.stringify({ resize: { cols, rows } }));
+  }
+}
+
+// Toggle full-screen focus for this group. Marks the group + body with the CSS
+// classes that expand it to the viewport; terminals/sockets are never touched.
+// After the layout settles the active session is refit to the new size.
+function toggleFocus(group, btn) {
+  const on = !group.root.classList.contains('terminal-focused');
+  group.root.classList.toggle('terminal-focused', on);
+  document.body.classList.toggle('terminal-focus', on);
+  btn.setAttribute('aria-pressed', String(on));
+  requestAnimationFrame(() => refitActive(group));
+}
+
 // Build one macro chip (send on tap, ✕ to delete + re-render all strips). Delete
 // is identity-based (passes the macro object) so a stale index can't remove the
 // wrong entry.
@@ -98,6 +123,15 @@ function buildToolbar(group) {
     btn.onclick = () => sendToActive(group, seq);
     keys.appendChild(btn);
   }
+
+  const focusBtn = document.createElement('button');
+  focusBtn.type = 'button';
+  focusBtn.className = 'qkey term-focus-toggle';
+  focusBtn.textContent = '⛶';
+  focusBtn.setAttribute('aria-label', 'Toggle full screen');
+  focusBtn.setAttribute('aria-pressed', 'false');
+  focusBtn.onclick = () => toggleFocus(group, focusBtn);
+  keys.appendChild(focusBtn);
 
   const strip = document.createElement('div');
   strip.className = 'term-macros-strip';
@@ -192,6 +226,11 @@ export function closeTab(group, sessionId) {
   sess.tabEl.remove();
   group.sessions.delete(sessionId);
   if (group.sessions.size === 0) {
+    // Closing the last tab while focused would otherwise leave the page
+    // scroll-locked with no terminal/exit visible — release focus first.
+    if (group.root.classList.contains('terminal-focused')) {
+      document.body.classList.remove('terminal-focus');
+    }
     group.root.remove();
     terminalGroups.delete(group.worktreePath);
     return;

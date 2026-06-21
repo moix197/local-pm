@@ -237,30 +237,53 @@ pre {
 .terminal-pane { background: #000; overflow: hidden; }
 .terminal-pane.hidden { display: none; }
 .terminal-pane .terminal-body { height: 500px; }
+/* Keep touch-drag scrolling inside the xterm scrollback instead of chaining to
+   the page: the viewport (xterm's overflow-y:scroll element) owns the gesture. */
+.terminal-body .xterm-viewport {
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
 
 /* Mobile input toolbar, anchored at the bottom of each group. Quick keys are
    mono/fixed; macro chips live outside .terminal-tabs so they carry their own
    chip styling (the .tab rules above are scoped to .terminal-tabs). */
 .terminal-toolbar { display: flex; flex-direction: column; gap: 6px; padding: 6px 9px; background: #161b22; border-top: 1px solid var(--border); }
-.term-quickkeys, .term-macros-strip { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.term-quickkeys, .term-macros-strip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .terminal-toolbar .qkey {
-  min-height: 32px; padding: 4px 10px; border-radius: 6px;
+  min-height: 44px; min-width: 44px; padding: 8px 14px; border-radius: 6px;
   border: 1px solid var(--border); background: #21262d; color: var(--text);
-  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer;
+  font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer;
 }
 .terminal-toolbar .qkey:hover { border-color: var(--accent); }
 .terminal-toolbar .qkey.add-macro { color: var(--muted); }
 .term-macros-strip .term-macro {
   display: inline-flex; align-items: center; gap: 6px;
-  min-height: 32px; padding: 4px 8px; border-radius: 6px;
+  min-height: 36px; padding: 6px 10px; border-radius: 6px;
   border: 1px solid var(--border); background: #21262d; color: var(--muted);
-  font-size: 12px; cursor: pointer;
+  font-size: 13px; cursor: pointer;
 }
 .term-macros-strip .term-macro .term-macro-close {
   background: none; border: none; padding: 0; font: inherit; cursor: pointer;
   color: var(--muted);
 }
 .term-macros-strip .term-macro .term-macro-close:hover { color: var(--red); }
+
+/* Focus / full-screen mode. The class lives on <body> (a stable node the 2s
+   poll never rebuilds) and the focused group is tagged .terminal-focused. The
+   group becomes a fixed, full-viewport flex column: tabs + body(flex:1) +
+   toolbar, so the terminal body grows instead of staying pinned at 500px.
+   100dvh tracks the dynamic viewport so mobile browser chrome doesn't clip it;
+   the 100vh line is a fallback for engines without dvh. */
+body.terminal-focus { overflow: hidden; }
+body.terminal-focus .terminal-group.terminal-focused {
+  position: fixed; inset: 0; z-index: 200; margin: 0; border: none; border-radius: 0;
+  display: flex; flex-direction: column;
+  height: 100vh; height: 100dvh;
+}
+body.terminal-focus .terminal-group.terminal-focused .terminal-pane:not(.hidden) { flex: 1; display: flex; min-height: 0; }
+body.terminal-focus .terminal-group.terminal-focused .terminal-pane .terminal-body { flex: 1; height: auto; min-height: 0; }
+.qkey.term-focus-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 
 /* --- App shell (Phase 2) --------------------------------------------- */
 .hidden { display: none; }
