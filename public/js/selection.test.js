@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 // module load, so it is safe to import under node:test.
 import {
   resolveSelection,
+  resolveProjectLanding,
+  firstRunningOrFirst,
   isSelected,
   toggleProjectCollapse,
   collapsedProjects,
@@ -80,4 +82,63 @@ test('toggleProjectCollapse flips set membership', () => {
   assert.ok(collapsedProjects.has('a'));
   toggleProjectCollapse('a');
   assert.ok(!collapsedProjects.has('a'));
+});
+
+// ─── firstRunningOrFirst ────────────────────────────────────────────────────
+
+test('firstRunningOrFirst returns the first running worktree', () => {
+  const wts = [{ project: 'a', path: '/a/1' }, { project: 'a', path: '/a/2' }];
+  const running = new Set(['/a/2']);
+  assert.deepEqual(firstRunningOrFirst(wts, running), { type: 'worktree', path: '/a/2' });
+});
+
+test('firstRunningOrFirst falls back to first when none running', () => {
+  const wts = [{ project: 'a', path: '/a/1' }, { project: 'a', path: '/a/2' }];
+  assert.deepEqual(firstRunningOrFirst(wts, new Set()), { type: 'worktree', path: '/a/1' });
+});
+
+test('firstRunningOrFirst returns null for empty list', () => {
+  assert.equal(firstRunningOrFirst([], new Set()), null);
+});
+
+// ─── resolveProjectLanding ──────────────────────────────────────────────────
+
+test('resolveProjectLanding returns first running worktree in project', () => {
+  const state = {
+    worktrees: [
+      { project: 'a', path: '/a/1' },
+      { project: 'a', path: '/a/2' },
+      { project: 'b', path: '/b/1' },
+    ],
+    running: [{ path: '/a/2' }],
+  };
+  assert.deepEqual(resolveProjectLanding(state, 'a'), { type: 'worktree', path: '/a/2' });
+});
+
+test('resolveProjectLanding falls back to first worktree when none running', () => {
+  const state = {
+    worktrees: [
+      { project: 'a', path: '/a/1' },
+      { project: 'a', path: '/a/2' },
+    ],
+    running: [],
+  };
+  assert.deepEqual(resolveProjectLanding(state, 'a'), { type: 'worktree', path: '/a/1' });
+});
+
+test('resolveProjectLanding returns null for project with zero worktrees', () => {
+  const state = { worktrees: [{ project: 'b', path: '/b/1' }], running: [] };
+  assert.equal(resolveProjectLanding(state, 'a'), null);
+});
+
+test('resolveProjectLanding ignores running servers from other projects', () => {
+  const state = {
+    worktrees: [
+      { project: 'a', path: '/a/1' },
+      { project: 'b', path: '/b/1' },
+    ],
+    running: [{ path: '/b/1' }],
+  };
+  // project 'a' has no running server → falls back to first
+  assert.deepEqual(resolveProjectLanding(state, 'a'), { type: 'worktree', path: '/a/1' });
 });

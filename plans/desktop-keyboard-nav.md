@@ -184,17 +184,17 @@ times out after ~700ms.
 
 **Steps:**
 
-- [ ] `traversal.js`: pure next/prev project + next/prev worktree resolution from grouped state (reuse `groupByProject`); **wrap** at both boundaries; return null on empty tree
-- [ ] `selection.js`: factor `firstRunningOrFirst()` out of `resolveSelection()` and add project-scoped `resolveProjectLanding(state, project)` — this is the "running worktree if any, else first worktree" rule (mirrors `resolveSelection`'s precedent, narrowed to one project). Project with zero worktrees → null.
-- [ ] Selecting a project (via `gt`/`gT`) lands on `resolveProjectLanding()`; if it returns null (empty project), skip to the next non-empty project
-- [ ] `keynav.js`: `g`-prefix sequential combo detector (`gt` next, `gT` prev project). Pending `g` resets on: any non-`t`/`T` key (abort, and let that key dispatch normally), and a ~700ms timeout so a stale `g` never lingers
-- [ ] Single project: `gt`/`gT` is a no-op (or self-wraps to the same project) — never throws
-- [ ] `keynav.js`: `↑`/`↓` move between worktrees within the selected project only (wrap at top/bottom)
-- [ ] Empty tree (no projects / no worktrees): all traversal keys no-op, selection stays null
-- [ ] Route every move through `selectItem()` + `requestRender()` (no bespoke DOM mutation)
-- [ ] Auto-expand the target project if collapsed before/at selection
-- [ ] Arrows do not scroll the page while in NAV mode with a tree selection (preventDefault appropriately)
-- [ ] Update `public/js/README.md`
+- [x] `traversal.js`: pure next/prev project + next/prev worktree resolution from grouped state (reuse `groupByProject`); **wrap** at both boundaries; return null on empty tree
+- [x] `selection.js`: factor `firstRunningOrFirst()` out of `resolveSelection()` and add project-scoped `resolveProjectLanding(state, project)` — this is the "running worktree if any, else first worktree" rule (mirrors `resolveSelection`'s precedent, narrowed to one project). Project with zero worktrees → null.
+- [x] Selecting a project (via `gt`/`gT`) lands on `resolveProjectLanding()`; if it returns null (empty project), skip to the next non-empty project
+- [x] `keynav.js`: `g`-prefix sequential combo detector (`gt` next, `gT` prev project). Pending `g` resets on: any non-`t`/`T` key (abort, and let that key dispatch normally), and a ~700ms timeout so a stale `g` never lingers
+- [x] Single project: `gt`/`gT` is a no-op (or self-wraps to the same project) — never throws
+- [x] `keynav.js`: `↑`/`↓` move between worktrees within the selected project only (wrap at top/bottom)
+- [x] Empty tree (no projects / no worktrees): all traversal keys no-op, selection stays null
+- [x] Route every move through `selectItem()` + `requestRender()` (no bespoke DOM mutation)
+- [x] Auto-expand the target project if collapsed before/at selection
+- [x] Arrows do not scroll the page while in NAV mode with a tree selection (preventDefault appropriately)
+- [x] Update `public/js/README.md`
 
 **Tests:**
 
@@ -205,7 +205,7 @@ times out after ~700ms.
 
 **Verification:**
 
-- [ ] Automated tests for this phase pass: `pnpm test`
+- [x] Automated tests for this phase pass: `pnpm test`
 - [ ] Desktop: `gt`/`gT` cycle through projects (wrapping at ends); each lands on the project's running-else-first worktree
 - [ ] `↑`/`↓` move within the selected project's worktrees and wrap at top/bottom; sidebar highlight + main pane follow
 - [ ] Landing on a worktree in a collapsed project auto-expands it

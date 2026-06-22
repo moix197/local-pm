@@ -19,4 +19,5 @@ Native ESM, no build step. Served by `serveStatic` from `src/server.js` under
 | `keynav/mode.js` | Leaf: NAV/WRITING mode enum + get/set + double-Esc detector (`handleEscPress`, `isDoubleEsc`, `clearEscPending`). No DOM, no app imports. Unit-tested. |
 | `keynav/desktop-gate.js` | Leaf: `isDesktop(matchMediaFn?)` — true iff viewport ≥ 769px. Accepts a matchMedia stub for unit tests. Unit-tested. |
 | `keynav/mode-badge.js` | Fixed-position NAV/WRITING badge on `document.body`: `assertBadge(mode)` / `removeBadge()`. Idempotent, survives 2s poll. |
-| `keynav/keynav.js` | Global capture-phase keydown scaffold: `initKeynav()` (desktop-only). NAV mode: Enter/i focuses terminal + switches to WRITING. WRITING mode: double-Esc blurs terminal + returns to NAV; lone Esc propagates to xterm. |
+| `keynav/keynav.js` | Global capture-phase keydown scaffold: `initKeynav()` (desktop-only). NAV mode: `Enter`/`i` focuses terminal + switches to WRITING; `gt`/`gT` move to next/prev project; `↑`/`↓` move between worktrees within current project (arrows prevent page scroll). WRITING mode: double-Esc blurs terminal + returns to NAV; lone Esc propagates to xterm. |
+| `keynav/traversal.js` | Pure index math over the grouped tree: `nextProject`/`prevProject`/`nextWorktree`/`prevWorktree`. Boundaries wrap. Empty tree → null. No DOM. Imports `grouping.js` only. Unit-tested. |
