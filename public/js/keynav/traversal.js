@@ -38,32 +38,30 @@ export function adjacentProject(state, sel, delta) {
   return projects[next][0];
 }
 
-// Move to the next worktree (+1) or previous worktree (-1) within the selected
-// project. Wraps at both ends. Returns a worktree path, or null if no project
-// is selected or the project has no worktrees.
-export function adjacentWorktree(state, sel, delta) {
-  const projects = nonEmptyProjects(state);
-  if (projects.length === 0) return null;
-  if (!sel) return null;
+// Flatten every worktree across all non-empty projects into one ordered list,
+// matching the sidebar's top-to-bottom order.
+function flattenWorktrees(state) {
+  const flat = [];
+  for (const [, wts] of nonEmptyProjects(state)) flat.push(...wts);
+  return flat;
+}
 
-  const projectIdx = currentProjectIndex(projects, sel);
-  if (projectIdx === -1) return null;
+// Move to the next (+1) or previous (-1) worktree across the WHOLE tree, crossing
+// project boundaries. Wraps at both ends. With no worktree selected, the first
+// move lands on the first (down) or last (up) worktree. Returns a worktree path,
+// or null if the tree is empty.
+export function adjacentInTree(state, sel, delta) {
+  const flat = flattenWorktrees(state);
+  if (flat.length === 0) return null;
 
-  const [, worktrees] = projects[projectIdx];
-  if (worktrees.length === 0) return null;
-
-  let wtIdx = -1;
-  if (sel.type === 'worktree') {
-    wtIdx = worktrees.findIndex((w) => w.path === sel.path);
-  }
-  // If selection is on the project itself or worktree not found, start at edge.
-  if (wtIdx === -1) wtIdx = delta > 0 ? worktrees.length - 1 : 0;
-  const next = wrap(wtIdx, worktrees.length, delta);
-  return worktrees[next].path;
+  let idx = -1;
+  if (sel && sel.type === 'worktree') idx = flat.findIndex((w) => w.path === sel.path);
+  if (idx === -1) return delta > 0 ? flat[0].path : flat[flat.length - 1].path;
+  return flat[wrap(idx, flat.length, delta)].path;
 }
 
 // Convenience wrappers used by keynav.js for readability.
 export function nextProject(state, sel) { return adjacentProject(state, sel, +1); }
 export function prevProject(state, sel) { return adjacentProject(state, sel, -1); }
-export function nextWorktree(state, sel) { return adjacentWorktree(state, sel, +1); }
-export function prevWorktree(state, sel) { return adjacentWorktree(state, sel, -1); }
+export function nextInTree(state, sel) { return adjacentInTree(state, sel, +1); }
+export function prevInTree(state, sel) { return adjacentInTree(state, sel, -1); }

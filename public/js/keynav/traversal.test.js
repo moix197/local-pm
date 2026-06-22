@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { nextProject, prevProject, nextWorktree, prevWorktree } from './traversal.js';
+import { nextProject, prevProject, nextInTree, prevInTree } from './traversal.js';
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 function state(worktrees) { return { worktrees, running: [] }; }
@@ -17,12 +17,12 @@ test('empty tree: prevProject returns null', () => {
   assert.equal(prevProject(state([]), null), null);
 });
 
-test('empty tree: nextWorktree returns null', () => {
-  assert.equal(nextWorktree(state([]), null), null);
+test('empty tree: nextInTree returns null', () => {
+  assert.equal(nextInTree(state([]), null), null);
 });
 
-test('empty tree: prevWorktree returns null', () => {
-  assert.equal(prevWorktree(state([]), null), null);
+test('empty tree: prevInTree returns null', () => {
+  assert.equal(prevInTree(state([]), null), null);
 });
 
 // ─── single project ──────────────────────────────────────────────────────────
@@ -81,51 +81,56 @@ test('nextProject from null selection starts at first project', () => {
   assert.equal(nextProject(threeProjects, null), 'alpha');
 });
 
-// ─── worktree traversal within a project ────────────────────────────────────
-const twoWorktrees = state([
-  wt('proj', '/p/main'),
-  wt('proj', '/p/feat'),
-]);
-
-test('nextWorktree moves to next worktree', () => {
-  const sel = { type: 'worktree', path: '/p/main' };
-  assert.equal(nextWorktree(twoWorktrees, sel), '/p/feat');
+// ─── worktree traversal across the whole tree (crosses project boundaries) ───
+test('nextInTree moves to next worktree within a project', () => {
+  const sel = { type: 'worktree', path: '/alpha/main' };
+  assert.equal(nextInTree(threeProjects, sel), '/alpha/feat');
 });
 
-test('nextWorktree wraps from last to first', () => {
-  const sel = { type: 'worktree', path: '/p/feat' };
-  assert.equal(nextWorktree(twoWorktrees, sel), '/p/main');
+test('nextInTree crosses into the next project at a project boundary', () => {
+  const sel = { type: 'worktree', path: '/alpha/feat' };
+  assert.equal(nextInTree(threeProjects, sel), '/beta/main');
 });
 
-test('prevWorktree moves to previous worktree', () => {
-  const sel = { type: 'worktree', path: '/p/feat' };
-  assert.equal(prevWorktree(twoWorktrees, sel), '/p/main');
+test('nextInTree wraps from the last worktree to the first', () => {
+  const sel = { type: 'worktree', path: '/gamma/main' };
+  assert.equal(nextInTree(threeProjects, sel), '/alpha/main');
 });
 
-test('prevWorktree wraps from first to last', () => {
-  const sel = { type: 'worktree', path: '/p/main' };
-  assert.equal(prevWorktree(twoWorktrees, sel), '/p/feat');
+test('prevInTree crosses back into the previous project', () => {
+  const sel = { type: 'worktree', path: '/beta/main' };
+  assert.equal(prevInTree(threeProjects, sel), '/alpha/feat');
 });
 
-test('nextWorktree returns null when no selection', () => {
-  assert.equal(nextWorktree(twoWorktrees, null), null);
+test('prevInTree wraps from the first worktree to the last', () => {
+  const sel = { type: 'worktree', path: '/alpha/main' };
+  assert.equal(prevInTree(threeProjects, sel), '/gamma/main');
 });
 
-test('prevWorktree returns null when no selection', () => {
-  assert.equal(prevWorktree(twoWorktrees, null), null);
+test('nextInTree from null selection lands on the first worktree', () => {
+  assert.equal(nextInTree(threeProjects, null), '/alpha/main');
 });
 
-// ─── project with single worktree ────────────────────────────────────────────
-test('single worktree: nextWorktree wraps to same worktree', () => {
+test('prevInTree from null selection lands on the last worktree', () => {
+  assert.equal(prevInTree(threeProjects, null), '/gamma/main');
+});
+
+test('nextInTree with an unknown selection starts at the first worktree', () => {
+  const sel = { type: 'worktree', path: '/vanished/path' };
+  assert.equal(nextInTree(threeProjects, sel), '/alpha/main');
+});
+
+// ─── single worktree in the whole tree ───────────────────────────────────────
+test('single worktree: nextInTree wraps to same worktree', () => {
   const s = state([wt('p', '/p/main')]);
   const sel = { type: 'worktree', path: '/p/main' };
-  assert.equal(nextWorktree(s, sel), '/p/main');
+  assert.equal(nextInTree(s, sel), '/p/main');
 });
 
-test('single worktree: prevWorktree wraps to same worktree', () => {
+test('single worktree: prevInTree wraps to same worktree', () => {
   const s = state([wt('p', '/p/main')]);
   const sel = { type: 'worktree', path: '/p/main' };
-  assert.equal(prevWorktree(s, sel), '/p/main');
+  assert.equal(prevInTree(s, sel), '/p/main');
 });
 
 // ─── projects-only-empty-project is skipped (nonEmptyProjects filter) ────────
@@ -142,10 +147,3 @@ test('project with zero worktrees is excluded from nextProject traversal', () =>
   assert.equal(nextProject(s, sel), 'beta');
 });
 
-// ─── boundary: worktree selection in a project not matching current ───────────
-test('nextWorktree returns null when selected worktree not found in any project', () => {
-  const s = state([wt('proj', '/p/main')]);
-  const sel = { type: 'worktree', path: '/other/vanished' };
-  // currentProjectIndex returns -1 → null
-  assert.equal(nextWorktree(s, sel), null);
-});

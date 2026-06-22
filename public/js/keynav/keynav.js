@@ -7,7 +7,7 @@ import { isDesktop } from './desktop-gate.js';
 import { assertBadge } from './mode-badge.js';
 import { focusTerminalForPath, blurActiveTerminal } from '../terminals.js';
 import { selected, selectItem, expandProject, resolveProjectLanding } from '../selection.js';
-import { nextProject, prevProject, nextWorktree, prevWorktree } from './traversal.js';
+import { nextProject, prevProject, nextInTree, prevInTree } from './traversal.js';
 import * as appEvents from '../app-events.js';
 import { openPalette } from './palette.js';
 
@@ -97,15 +97,15 @@ function handleNavMode(e) {
     return;
   }
 
-  // ── Arrow keys: ↑/↓ within current project ───────────────────────────────
+  // ── Arrow keys: ↑/↓ across the whole tree (crosses project boundaries) ─────
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     const state = appEvents.lastState;
-    if (!state || !selected) return;
+    if (!state) return;
     e.preventDefault(); // prevent page scroll during tree nav
     e.stopPropagation();
     const targetPath = e.key === 'ArrowDown'
-      ? nextWorktree(state, selected)
-      : prevWorktree(state, selected);
+      ? nextInTree(state, selected)
+      : prevInTree(state, selected);
     if (!targetPath) return;
     const wt = (state.worktrees ?? []).find((w) => w.path === targetPath);
     if (wt) expandProject(wt.project);
