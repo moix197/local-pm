@@ -26,6 +26,7 @@ import { initKeynav } from './keynav/keynav.js';
 import { assertBadge } from './keynav/mode-badge.js';
 import { getMode } from './keynav/mode.js';
 import { isDesktop } from './keynav/desktop-gate.js';
+import { refreshPaletteIfOpen } from './keynav/palette.js';
 
 function showLoginOverlay(errorMsg = '') {
   document.getElementById('overlayError').textContent = errorMsg;
@@ -107,6 +108,8 @@ function render(state, busy = inFlight) {
   renderMain(state, resolved, busy);
   updateTerminalVisibility(resolved?.type === 'worktree' ? resolved.path : null);
   if (isDesktop()) assertBadge(getMode());
+  refreshPaletteIfOpen();
+  refreshPaletteIfOpen();
 }
 
 let pollingInterval = null;

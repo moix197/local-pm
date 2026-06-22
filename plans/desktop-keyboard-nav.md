@@ -255,17 +255,17 @@ palette. MRU order persists across reloads (localStorage, same store as the toke
 
 **Steps:**
 
-- [ ] `fuzzy.js`: subsequence matcher with scoring (contiguous + word-boundary bonuses); pure function `score(query, target)`
-- [ ] `mru.js`: load/record MRU list of worktree paths under the existing localStorage namespace; tolerant reads/writes (mirror `term-macros.js`)
-- [ ] `palette.js`: build candidate rows `{path, label: "project / branch", running}` from the latest state's worktrees + `runningPaths`; rebuild rows on a poll while open so the list stays fresh without closing
-- [ ] Empty query → MRU-first ordering (most recent first), then remaining by stable order; non-empty → fuzzy-ranked
-- [ ] No worktrees → palette still opens, shows an empty-state hint, `Enter` is a no-op
-- [ ] Render running marker (dot/badge) on running rows; reuse existing green-dot style
-- [ ] `ctrl+shift+p` opens (NAV mode only — inert in WRITING), input pre-focused; `↑`/`↓` move highlight; `Enter`/click jumps; `Esc` closes the palette only (does not change mode; the global double-Esc detector is not armed while the palette input has focus)
-- [ ] MRU entries whose worktree path no longer exists are filtered out at open time (stale paths after a project removal)
-- [ ] On jump: `selectItem()`, auto-expand project, `requestRender()`, and `mru.record(path)`
-- [ ] Reuse `.overlay`/`.overlay-panel`/`.hidden`; add top-center CSS variant only
-- [ ] Update `public/js/README.md`
+- [x] `fuzzy.js`: subsequence matcher with scoring (contiguous + word-boundary bonuses); pure function `score(query, target)`
+- [x] `mru.js`: load/record MRU list of worktree paths under the existing localStorage namespace; tolerant reads/writes (mirror `term-macros.js`)
+- [x] `palette.js`: build candidate rows `{path, label: "project / branch", running}` from the latest state's worktrees + `runningPaths`; rebuild rows on a poll while open so the list stays fresh without closing
+- [x] Empty query → MRU-first ordering (most recent first), then remaining by stable order; non-empty → fuzzy-ranked
+- [x] No worktrees → palette still opens, shows an empty-state hint, `Enter` is a no-op
+- [x] Render running marker (dot/badge) on running rows; reuse existing green-dot style
+- [x] `ctrl+shift+p` opens (NAV mode only — inert in WRITING), input pre-focused; `↑`/`↓` move highlight; `Enter`/click jumps; `Esc` closes the palette only (does not change mode; the global double-Esc detector is not armed while the palette input has focus)
+- [x] MRU entries whose worktree path no longer exists are filtered out at open time (stale paths after a project removal)
+- [x] On jump: `selectItem()`, auto-expand project, `requestRender()`, and `mru.record(path)`
+- [x] Reuse `.overlay`/`.overlay-panel`/`.hidden`; add top-center CSS variant only
+- [x] Update `public/js/README.md`
 
 **Tests:**
 
@@ -276,7 +276,7 @@ palette. MRU order persists across reloads (localStorage, same store as the toke
 
 **Verification:**
 
-- [ ] Automated tests for this phase pass: `pnpm test`
+- [x] Automated tests for this phase pass: `pnpm test`
 - [ ] Desktop NAV mode: `ctrl+shift+p` opens top-center overlay with focused input
 - [ ] WRITING mode (terminal focused): `ctrl+shift+p` does NOT open the palette
 - [ ] Typing filters `project / branch` rows sensibly (closer matches rank higher)

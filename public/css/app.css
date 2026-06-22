@@ -418,6 +418,52 @@ header button { white-space: nowrap; }
 .row.link:hover { border-color: var(--accent); }
 .row.link:active { background: #1c2128; }
 
+/* --- Quick-nav palette -------------------------------------------------- */
+/* Top-center overlay variant: reuses .overlay backdrop + .overlay-panel card,
+   overrides alignment to top-center and widens the panel for the search list. */
+.palette-overlay {
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+}
+.palette-panel {
+  max-width: 560px;
+  width: 100%;
+  padding: 16px;
+}
+.palette-input {
+  width: 100%;
+  font: inherit;
+  padding: 8px 10px;
+  background: #010409;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.palette-input:focus { outline: none; border-color: var(--accent); }
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.palette-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.palette-row:hover { background: #21262d; }
+.palette-row-active { background: #21262d; border: 1px solid var(--accent); padding: 6px 9px; }
+.palette-dot { flex-shrink: 0; }
+.palette-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-empty { padding: 12px 10px; color: var(--muted); font-size: 13px; list-style: none; }
+
 /* --- Keyboard nav mode badge ------------------------------------------ */
 .keynav-badge {
   position: fixed;

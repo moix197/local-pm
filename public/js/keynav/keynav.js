@@ -9,6 +9,7 @@ import { focusTerminalForPath, blurActiveTerminal } from '../terminals.js';
 import { selected, selectItem, expandProject, resolveProjectLanding } from '../selection.js';
 import { nextProject, prevProject, nextWorktree, prevWorktree } from './traversal.js';
 import * as appEvents from '../app-events.js';
+import { openPalette } from './palette.js';
 
 // g-prefix sequence detector state.
 // pending = true when a lone `g` was just pressed and we are waiting for t/T.
@@ -109,6 +110,14 @@ function handleNavMode(e) {
     const wt = (state.worktrees ?? []).find((w) => w.path === targetPath);
     if (wt) expandProject(wt.project);
     selectItem({ type: 'worktree', path: targetPath });
+    return;
+  }
+
+  // ── ctrl+shift+p: open quick-nav palette ────────────────────────────────
+  if (e.ctrlKey && e.shiftKey && e.key === 'P') {
+    e.preventDefault();
+    e.stopPropagation();
+    openPalette();
     return;
   }
 
