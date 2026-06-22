@@ -109,7 +109,6 @@ function render(state, busy = inFlight) {
   updateTerminalVisibility(resolved?.type === 'worktree' ? resolved.path : null);
   if (isDesktop()) assertBadge(getMode());
   refreshPaletteIfOpen();
-  refreshPaletteIfOpen();
 }
 
 let pollingInterval = null;
