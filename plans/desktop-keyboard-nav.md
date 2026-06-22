@@ -329,7 +329,7 @@ palette. MRU order persists across reloads (localStorage, same store as the toke
 - [ ] No CLAUDE.md invariants violated (verify: no new deps in `package.json`, no build artifacts, import graph still a DAG — nothing imports `main.js`)
 - [ ] Feature tested manually on desktop (golden path + edge cases: empty project list, single project, all-collapsed tree, terminal running vim)
 - [ ] Feature confirmed inert on mobile viewport
-- [ ] `.ai/` knowledge base synced via the `sync-knowledge` skill (see Knowledge Base Impact)
+- [x] `.ai/` knowledge base synced via the `sync-knowledge` skill (see Knowledge Base Impact)
 - [ ] Overall success criteria met
 - [ ] All phase checkboxes above are ticked
 

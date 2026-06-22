@@ -59,6 +59,22 @@ open/closed state. A per-group full-screen "focus mode" (⛶) toggles classes on
 scroll for mobile terminal use; it refits the active session (never disposes it)
 and auto-releases on worktree switch or last-tab close to avoid a scroll-lock trap.
 
+On desktop, a modal keyboard layer (`public/js/keynav/*`) lets the whole UI be
+driven without a mouse: a single capture-phase `keydown` handler with two modes —
+NAV (`gt`/`gT` projects, `↑`/`↓` worktrees, `ctrl+shift+p` fuzzy quick-nav palette,
+`Enter`/`i` into a terminal) and WRITING (a terminal is focused; the handler owns
+nothing but a double-`Esc`, so a lone `Esc` and every other key reach xterm). It is
+gated to desktop and inert on mobile (which has the touch toolbar instead). The
+layer obeys the same DAG discipline as the rest of the frontend: it routes selection
++ render through `app-events.js`/`selection.js` and never imports `main.js`; its mode
+reducer, desktop gate, traversal index math, fuzzy matcher, and MRU localStorage
+store are pure leaves so they unit-test without a DOM. The `NAV`/`WRITING` badge and
+the palette overlay mount on `document.body` (outside the poll-rebuilt sidebar/main
+subtree) and re-assert idempotently in the render callback, so the 2s poll never
+tears them down or steals focus. See
+[desktop-modal-keyboard-nav](decisions/desktop-modal-keyboard-nav.md) and
+[quicknav-mru-localstorage](decisions/quicknav-mru-localstorage.md).
+
 `mcp/` is a **standalone package** outside the daemon: its own `package.json`
 (`@modelcontextprotocol/sdk` + `zod`, deps the daemon never pulls in), not a pnpm
 workspace member, no shared code. It holds zero state and forwards every tool call
