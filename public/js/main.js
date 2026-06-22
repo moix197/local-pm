@@ -22,6 +22,10 @@ import { resolveSelection, setSelected, selected } from './selection.js';
 import { renderSidebar } from './sidebar.js';
 import { renderMain, updateTerminalVisibility } from './main-pane.js';
 import { submitAddProject, toggleBrowser, openAddModal, closeAddModal } from './add-project.js';
+import { initKeynav } from './keynav/keynav.js';
+import { assertBadge } from './keynav/mode-badge.js';
+import { getMode } from './keynav/mode.js';
+import { isDesktop } from './keynav/desktop-gate.js';
 
 function showLoginOverlay(errorMsg = '') {
   document.getElementById('overlayError').textContent = errorMsg;
@@ -102,6 +106,7 @@ function render(state, busy = inFlight) {
   renderSidebar(state);
   renderMain(state, resolved, busy);
   updateTerminalVisibility(resolved?.type === 'worktree' ? resolved.path : null);
+  if (isDesktop()) assertBadge(getMode());
 }
 
 let pollingInterval = null;
@@ -127,6 +132,7 @@ function startPolling() {
 
 registerRender(render);
 registerAuthError(renderAuthError);
+initKeynav();
 
 document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
 document.getElementById('sidebarBackdrop').addEventListener('click', () => setSidebarOpen(false));

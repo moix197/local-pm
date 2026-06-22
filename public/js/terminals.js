@@ -1,5 +1,8 @@
 import { TOKEN } from './api.js';
 import { loadMacros, addMacro, removeMacro } from './term-macros.js';
+import { MODE, setMode } from './keynav/mode.js';
+import { assertBadge } from './keynav/mode-badge.js';
+import { isDesktop } from './keynav/desktop-gate.js';
 
 // xterm (Terminal) and FitAddon are loaded as globals via <script> tags in index.html.
 
@@ -16,6 +19,9 @@ const newSessionId = () =>
 // `sessions` Map<sessionId, {ws, terminal, fitAddon, ro, kind, pane, tabEl}>.
 // Groups live under #terminals so the 2s poll's innerHTML wipe never removes them.
 const terminalGroups = new Map();
+
+// Tracks the last group whose terminal received focus (for blurActiveTerminal).
+let _activeGroup = null;
 
 // Quick-key buttons: [label, raw byte sequence, aria-label?]. The byte sequence
 // is sent to the active PTY on the same channel xterm onData uses. Glyph-only
@@ -211,6 +217,8 @@ export function activateTab(group, sessionId) {
   if (sess.ws.readyState === WebSocket.CLOSED) connectSession(group, sessionId);
   sess.fitAddon.fit();
   sess.terminal.focus();
+  _activeGroup = group;
+  if (isDesktop()) { setMode(MODE.WRITING); assertBadge(MODE.WRITING); }
 }
 
 // Closing a tab disconnects the WS (server keeps the session alive per detach
@@ -293,4 +301,24 @@ export function openTerminal(worktreePath, kind) {
 
   connectSession(group, sessionId);
   activateTab(group, sessionId);
+}
+
+// Focus the active session's xterm terminal for the given worktree path.
+// Returns true if a terminal was found and focused, false otherwise.
+export function focusTerminalForPath(path) {
+  const group = terminalGroups.get(path);
+  if (!group || !group.activeId) return false;
+  const sess = group.sessions.get(group.activeId);
+  if (!sess) return false;
+  sess.terminal.focus();
+  _activeGroup = group;
+  return true;
+}
+
+// Blur the currently active terminal (called by keynav on double-Esc exit).
+export function blurActiveTerminal() {
+  if (!_activeGroup) return;
+  const sess = _activeGroup.sessions.get(_activeGroup.activeId);
+  if (sess) sess.terminal.blur();
+  _activeGroup = null;
 }

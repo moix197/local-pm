@@ -117,15 +117,15 @@ badge never appears and no global key handling occurs.
 
 **Steps:**
 
-- [ ] `mode.js`: mode enum + get/set + pure `isDoubleEsc(prevTs, nowTs)` helper (~300ms window). On a lone `Esc`, record its timestamp and let it pass; only when a second `Esc` lands inside the window is it a double — a single `Esc` followed by silence stays a single `Esc` (never swallowed).
-- [ ] `desktop-gate.js`: `isDesktop()` mirroring existing mobile detection (find and reuse it; do not invent a new breakpoint)
-- [ ] `keynav.js`: `initKeynav()` attaches a single capture-phase `keydown` on `document` only when desktop; early-return when target is an editable input/textarea/contenteditable (login/add-project modal inputs)
-- [ ] In NAV mode: `Enter`/`i` on the selected worktree → focus its terminal + `setMode(WRITING)`. If nothing is selected (empty state), no-op.
-- [ ] In WRITING mode: only the double-`Esc` is intercepted; the first `Esc` and every other key (including `ctrl+shift+p`) propagate to xterm untouched. Two `Esc` within window → blur terminal + `setMode(NAV)`.
-- [ ] `terminals.js`: terminal click/focus → `setMode(WRITING)`; expose focus/blur helpers consumed by `keynav.js` (writing-mode entry must actually `.focus()` the xterm instance, not just flip the badge)
-- [ ] `mode-badge.js`: create + update badge mounted on `document.body`; called on mode change and on each `render` (idempotent — never duplicates)
-- [ ] `main.js`: `initKeynav()` at bootstrap; re-assert badge in render callback
-- [ ] Update `public/js/README.md` with `keynav/*` rows
+- [x] `mode.js`: mode enum + get/set + pure `isDoubleEsc(prevTs, nowTs)` helper (~300ms window). On a lone `Esc`, record its timestamp and let it pass; only when a second `Esc` lands inside the window is it a double — a single `Esc` followed by silence stays a single `Esc` (never swallowed).
+- [x] `desktop-gate.js`: `isDesktop()` mirroring existing mobile detection (find and reuse it; do not invent a new breakpoint)
+- [x] `keynav.js`: `initKeynav()` attaches a single capture-phase `keydown` on `document` only when desktop; early-return when target is an editable input/textarea/contenteditable (login/add-project modal inputs)
+- [x] In NAV mode: `Enter`/`i` on the selected worktree → focus its terminal + `setMode(WRITING)`. If nothing is selected (empty state), no-op.
+- [x] In WRITING mode: only the double-`Esc` is intercepted; the first `Esc` and every other key (including `ctrl+shift+p`) propagate to xterm untouched. Two `Esc` within window → blur terminal + `setMode(NAV)`.
+- [x] `terminals.js`: terminal click/focus → `setMode(WRITING)`; expose focus/blur helpers consumed by `keynav.js` (writing-mode entry must actually `.focus()` the xterm instance, not just flip the badge)
+- [x] `mode-badge.js`: create + update badge mounted on `document.body`; called on mode change and on each `render` (idempotent — never duplicates)
+- [x] `main.js`: `initKeynav()` at bootstrap; re-assert badge in render callback
+- [x] Update `public/js/README.md` with `keynav/*` rows
 
 **Tests:**
 
@@ -136,7 +136,7 @@ badge never appears and no global key handling occurs.
 
 **Verification:**
 
-- [ ] Automated tests for this phase pass: `pnpm test` (Node `node:test`)
+- [x] Automated tests for this phase pass: `pnpm test` (Node `node:test`)
 - [ ] Desktop browser: badge shows `NAV`, survives several 2s polls without disappearing/duplicating
 - [ ] `Enter` and `i` on selected worktree both focus the terminal and flip badge to `WRITING`; clicking a terminal also flips to `WRITING`
 - [ ] Run `vim` (or `nano`) in a terminal: single `Esc` works normally (insert→normal mode, no nav-mode flip); two `Esc` slower than ~300ms apart are treated as two single Escs (still no flip); two within ~300ms exit to `NAV` and blur
