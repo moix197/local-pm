@@ -206,12 +206,12 @@ idle reaper stays bounded.
 
 **Steps:**
 
-- [ ] Add a `_setTimeoutFn` injectable seam in `pty.js` mirroring the existing `_setTimerFn` (`pty.js:36-38`) so the grace delay is test-controllable.
-- [ ] Extract a small `finalizeSession(session)` (~<30 lines, single focused function) that: writes the exit sequence (`\x03` then `/exit\r`) to `session.ptyProcess`, then schedules an **unconditional** force `ptyProcess.kill()` via `_setTimeoutFn` after a short grace (e.g. 1500 ms). The force-kill is the guarantee — it fires **regardless** of whether claude honored `\x03`/`/exit`, so a claude that ignores the exit sequence still dies. Each pty op is individually `try/catch`-swallowed (a write to an already-exited pty must not throw past the kill). Store the returned timer handle on the session (`session._graceTimer`) so shutdown can settle it.
-- [ ] Rewire `killSession(id)` (`pty.js:145-150`) to: delete from the map immediately (so caps/listing/`MAX_SESSIONS` stay correct the instant kill is requested), then run `finalizeSession`. Preserve the `try/catch` swallow around all pty operations. Idempotency: a second `killSession` for the same id is a no-op (already removed from the map).
-- [ ] Keep the pending grace timer bounded: the reaper (`pty.js:163-177`) keeps calling `killSession` (now graceful) — the unconditional force-kill fallback guarantees the session leaves memory within the grace window, so the reaper never accumulates live sessions. `shutdown()` must not wait on grace timers (see next step).
-- [ ] In `shutdown()` (`pty.js:189-197`, SIGINT/SIGTERM at 199-200), iterate every session and **force-kill synchronously in bounded time** — best-effort write of the exit sequence, then an immediate, unconditional `ptyProcess.kill()` (do **not** await the async grace window on process exit), and `clearTimeout(session._graceTimer)` for any timer a prior `killSession` already scheduled, so no timer leaks and the daemon never hangs waiting on a graceful path. Net effect: clean console close gets the graceful grace window; SIGINT/SIGTERM gets an immediate guaranteed kill. (Note for reviewer: `server.js` has **no** kill path; all teardown — `killSession`, the reaper, `shutdown()` — lives in `pty.js`.)
-- [ ] Frame honestly in code comments + KB: claude already writes its session JSONL **incrementally** as the conversation progresses, so this change **hardens the last-turn flush + a clean `/resume` listing** on close — it is *not* the primary fix for refresh continuity (Phase 1 is). Do not oversell it as the mechanism that "saves" the conversation.
+- [x] Add a `_setTimeoutFn` injectable seam in `pty.js` mirroring the existing `_setTimerFn` (`pty.js:36-38`) so the grace delay is test-controllable.
+- [x] Extract a small `finalizeSession(session)` (~<30 lines, single focused function) that: writes the exit sequence (`\x03` then `/exit\r`) to `session.ptyProcess`, then schedules an **unconditional** force `ptyProcess.kill()` via `_setTimeoutFn` after a short grace (e.g. 1500 ms). The force-kill is the guarantee — it fires **regardless** of whether claude honored `\x03`/`/exit`, so a claude that ignores the exit sequence still dies. Each pty op is individually `try/catch`-swallowed (a write to an already-exited pty must not throw past the kill). Store the returned timer handle on the session (`session._graceTimer`) so shutdown can settle it.
+- [x] Rewire `killSession(id)` (`pty.js:145-150`) to: delete from the map immediately (so caps/listing/`MAX_SESSIONS` stay correct the instant kill is requested), then run `finalizeSession`. Preserve the `try/catch` swallow around all pty operations. Idempotency: a second `killSession` for the same id is a no-op (already removed from the map).
+- [x] Keep the pending grace timer bounded: the reaper (`pty.js:163-177`) keeps calling `killSession` (now graceful) — the unconditional force-kill fallback guarantees the session leaves memory within the grace window, so the reaper never accumulates live sessions. `shutdown()` must not wait on grace timers (see next step).
+- [x] In `shutdown()` (`pty.js:189-197`, SIGINT/SIGTERM at 199-200), iterate every session and **force-kill synchronously in bounded time** — best-effort write of the exit sequence, then an immediate, unconditional `ptyProcess.kill()` (do **not** await the async grace window on process exit), and `clearTimeout(session._graceTimer)` for any timer a prior `killSession` already scheduled, so no timer leaks and the daemon never hangs waiting on a graceful path. Net effect: clean console close gets the graceful grace window; SIGINT/SIGTERM gets an immediate guaranteed kill. (Note for reviewer: `server.js` has **no** kill path; all teardown — `killSession`, the reaper, `shutdown()` — lives in `pty.js`.)
+- [x] Frame honestly in code comments + KB: claude already writes its session JSONL **incrementally** as the conversation progresses, so this change **hardens the last-turn flush + a clean `/resume` listing** on close — it is *not* the primary fix for refresh continuity (Phase 1 is). Do not oversell it as the mechanism that "saves" the conversation.
 
 **Tests:**
 
@@ -221,7 +221,7 @@ idle reaper stays bounded.
 
 **Verification:**
 
-- [ ] Automated tests for this phase pass: `pnpm test`
+- [x] Automated tests for this phase pass: `pnpm test`
 - [ ] Manual: hold a conversation, close the console/app, reopen a console in that worktree, run `/resume` → the session is listed and resumes cleanly
 - [ ] Confirm **no zombie PTY/claude processes remain after console close**: close the tab, then check the process list (Task Manager / `Get-Process`) — the `claude`/`conhost`/pwsh PTY child for that session is gone within the grace window
 - [ ] Confirm **no zombie processes remain after daemon stop**: Ctrl-C / SIGTERM the daemon with a live console open → every PTY child terminates promptly (shutdown does not hang on grace timers)
@@ -232,12 +232,12 @@ idle reaper stays bounded.
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
+- [x] Code-reviewer agent has verified this phase (verdict: green; 2 nits, none blocking)
 - [ ] Any changes made in response to code-reviewer suggestions reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (see Documentation section)
+- [x] Tests for this phase written and passing
+- [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat(pty): graceful claude exit before force-kill to finalize session JSONL`
+- [x] Changes committed: `feat(pty): graceful claude exit before force-kill to finalize session JSONL`
 - [ ] Phase marked complete
 
 ---
