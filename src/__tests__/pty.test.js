@@ -158,12 +158,12 @@ describe('session operations', () => {
     killSession(session.id);
   });
 
-  it('killSession removes session from map immediately and sends exit sequence', async () => {
+  it('killSession removes session from map immediately and sends exit sequence (claude)', async () => {
     let timerCallback = null;
     _setTimeoutFn((fn) => { timerCallback = fn; return {}; });
 
     const fakes = setupFakes();
-    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'claude', cols: 80, rows: 24 });
     const id = session.id;
     killSession(id);
 
@@ -207,8 +207,8 @@ describe('session operations', () => {
     killSession(shell.id);
     assert.equal(getSession(shell.id), null, 'shell session removed');
     assert.ok(getSession(claude.id), 'claude session still alive');
-    // Shell pty received exit sequence (kill is deferred to grace timer); claude pty untouched
-    assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'shell pty received exit sequence');
+    // Shell pty gets NO exit sequence (shell kind is gated out); kill is deferred to grace timer; claude pty untouched
+    assert.deepEqual(fakes[0]._calls.write, [], 'shell pty received NO exit sequence');
     assert.equal(fakes[1]._calls.kill, 0, 'claude pty NOT killed');
     assert.deepEqual(fakes[1]._calls.write, [], 'claude pty NOT written to');
 
@@ -492,7 +492,20 @@ describe('graceful killSession / shutdown finalize', () => {
     _setClearTimeoutFn(clearTimeout);
   });
 
-  it('graceful kill: writes \\x03 and /exit\\r before scheduling force-kill', async () => {
+  it('graceful kill (claude): writes \\x03 and /exit\\r before scheduling force-kill', async () => {
+    let timerCallback = null;
+    _setTimeoutFn((fn) => { timerCallback = fn; return {}; });
+
+    const fakes = setupFakes();
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'claude', cols: 80, rows: 24 });
+    killSession(session.id);
+
+    assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'exit sequence written');
+    assert.equal(fakes[0]._calls.kill, 0, 'kill NOT called immediately');
+    assert.ok(timerCallback, 'grace timer scheduled');
+  });
+
+  it('shell session: force-killed via grace timer without exit sequence', async () => {
     let timerCallback = null;
     _setTimeoutFn((fn) => { timerCallback = fn; return {}; });
 
@@ -500,9 +513,12 @@ describe('graceful killSession / shutdown finalize', () => {
     const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
     killSession(session.id);
 
-    assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'exit sequence written');
-    assert.equal(fakes[0]._calls.kill, 0, 'kill NOT called immediately');
-    assert.ok(timerCallback, 'grace timer scheduled');
+    assert.deepEqual(fakes[0]._calls.write, [], 'no exit sequence written for shell session');
+    assert.equal(fakes[0]._calls.kill, 0, 'kill deferred — not called immediately');
+    assert.ok(timerCallback, 'grace timer still scheduled for shell session');
+
+    timerCallback();
+    assert.equal(fakes[0]._calls.kill, 1, 'shell session force-killed after grace elapses');
   });
 
   it('force-kill fires unconditionally when grace elapses even if pty never exited', async () => {
@@ -537,7 +553,7 @@ describe('graceful killSession / shutdown finalize', () => {
     _setTimeoutFn((fn) => { timerCallbacks.push(fn); return {}; });
 
     const fakes = setupFakes();
-    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'claude', cols: 80, rows: 24 });
     const id = session.id;
 
     killSession(id); // first call — schedules grace
@@ -547,7 +563,20 @@ describe('graceful killSession / shutdown finalize', () => {
     assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'exit sequence written exactly once');
   });
 
-  it('shutdown() force-kills map sessions synchronously without grace window', async () => {
+  it('shutdown() force-kills claude sessions synchronously with exit sequence', async () => {
+    _setTimeoutFn((fn) => { return {}; }); // no timer should fire for map sessions
+
+    const fakes = setupFakes();
+    const s = await spawnSession({ worktreePath: FAKE_PATH, kind: 'claude', cols: 80, rows: 24 });
+
+    shutdown();
+
+    assert.equal(getSession(s.id), null, 'session gone from map');
+    assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'exit sequence written by shutdown');
+    assert.equal(fakes[0]._calls.kill, 1, 'pty killed synchronously by shutdown');
+  });
+
+  it('shutdown() force-kills shell sessions synchronously without exit sequence', async () => {
     _setTimeoutFn((fn) => { return {}; }); // no timer should fire for map sessions
 
     const fakes = setupFakes();
@@ -556,7 +585,7 @@ describe('graceful killSession / shutdown finalize', () => {
     shutdown();
 
     assert.equal(getSession(s.id), null, 'session gone from map');
-    assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'exit sequence written by shutdown');
+    assert.deepEqual(fakes[0]._calls.write, [], 'no exit sequence for shell session');
     assert.equal(fakes[0]._calls.kill, 1, 'pty killed synchronously by shutdown');
   });
 

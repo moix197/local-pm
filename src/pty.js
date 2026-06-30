@@ -159,20 +159,25 @@ export function resizeSession(id, cols, rows) {
   session.ptyProcess.resize(clampDim(cols), clampDim(rows));
 }
 
-// Graceful session teardown: write exit sequence to prompt claude to flush its
-// incremental session JSONL, then unconditionally force-kill after a short grace
-// window. claude already writes JSONL as the conversation progresses — this
-// hardens the last-turn flush for a cleaner /resume listing on close. It is NOT
-// the primary fix for refresh continuity (Phase 1 handles that). On SIGINT/SIGTERM,
-// shutdown() skips this path and kills synchronously; do not block daemon exit here.
+// Graceful session teardown: for claude sessions, write exit sequence to prompt
+// claude to flush its incremental session JSONL, then unconditionally force-kill
+// after a short grace window. Shell sessions skip the exit sequence (bogus command)
+// but are still force-killed unconditionally via the grace timer. claude already
+// writes JSONL as the conversation progresses — this hardens the last-turn flush
+// for a cleaner /resume listing on close. It is NOT the primary fix for refresh
+// continuity (Phase 1 handles that). On SIGINT/SIGTERM, shutdown() skips this path
+// and kills synchronously; do not block daemon exit here.
 function finalizeSession(session) {
   _pendingGrace.add(session);
-  // Best-effort exit sequence — each op individually swallowed so a dead pty
-  // cannot throw past the kill
-  try { session.ptyProcess.write('\x03'); } catch {}
-  try { session.ptyProcess.write('/exit\r'); } catch {}
-  // Unconditional force-kill after grace — fires regardless of whether claude
-  // honored the exit sequence, preventing zombie ConPTY processes on Windows
+  // Best-effort exit sequence for claude sessions only — each op individually
+  // swallowed so a dead pty cannot throw past the kill
+  if (session.kind === 'claude') {
+    try { session.ptyProcess.write('\x03'); } catch {}
+    try { session.ptyProcess.write('/exit\r'); } catch {}
+  }
+  // Unconditional force-kill after grace — fires regardless of session kind and
+  // regardless of whether claude honored the exit sequence, preventing zombie
+  // ConPTY processes on Windows
   session._graceTimer = _timeoutFn(() => {
     _pendingGrace.delete(session);
     try { session.ptyProcess.kill(); } catch {}
@@ -230,10 +235,13 @@ export function shutdown() {
   }
   // Force-kill sessions still in the map synchronously — do NOT use the async
   // grace window on process exit (SIGINT/SIGTERM must terminate promptly).
+  // Best-effort exit sequence only for claude sessions; force-kill is unconditional.
   for (const session of [...sessions.values()]) {
     sessions.delete(session.id);
-    try { session.ptyProcess.write('\x03'); } catch {}
-    try { session.ptyProcess.write('/exit\r'); } catch {}
+    if (session.kind === 'claude') {
+      try { session.ptyProcess.write('\x03'); } catch {}
+      try { session.ptyProcess.write('/exit\r'); } catch {}
+    }
     try { session.ptyProcess.kill(); } catch {}
   }
   // Cancel grace timers from any prior killSession calls so no timer leaks
