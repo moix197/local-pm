@@ -1,5 +1,6 @@
 import { TOKEN } from './api.js';
 import { loadMacros, addMacro, removeMacro } from './term-macros.js';
+import { getSession, setSession, removeSession } from './term-sessions.js';
 import { MODE, setMode } from './keynav/mode.js';
 import { assertBadge } from './keynav/mode-badge.js';
 import { isDesktop } from './keynav/desktop-gate.js';
@@ -202,6 +203,7 @@ export function connectSession(group, sessionId) {
     terminal.write(data);
   };
   sess.ws = ws;
+  setSession(group.worktreePath, sessionId, kind);
 }
 
 export function activateTab(group, sessionId) {
@@ -233,6 +235,7 @@ export function closeTab(group, sessionId) {
   sess.pane.remove();
   sess.tabEl.remove();
   group.sessions.delete(sessionId);
+  removeSession(group.worktreePath);
   if (group.sessions.size === 0) {
     // Closing the last tab while focused would otherwise leave the page
     // scroll-locked with no terminal/exit visible — release focus first.
@@ -247,9 +250,8 @@ export function closeTab(group, sessionId) {
   activateTab(group, next);
 }
 
-export function openTerminal(worktreePath, kind) {
+export function openTerminal(worktreePath, kind, sessionId = newSessionId()) {
   const group = ensureTerminalGroup(worktreePath);
-  const sessionId = newSessionId();
   const n = (group.counts[kind] += 1);
   const tabLabel = `${kind === 'claude' ? 'Claude' : 'Shell'} #${n}`;
 
@@ -313,6 +315,19 @@ export function focusTerminalForPath(path) {
   sess.terminal.focus();
   _activeGroup = group;
   return true;
+}
+
+// Reconnect the active worktree's saved console session on page load.
+// No-op when: path is falsy, a group already exists (already open), or no
+// saved descriptor exists (fresh load or explicit close cleared it).
+// Called once after the first successful tick — thin entry point, all logic
+// in term-sessions.js + openTerminal.
+export function reconnectActiveWorktree(worktreePath) {
+  if (!worktreePath) return;
+  if (terminalGroups.has(worktreePath)) return;
+  const saved = getSession(worktreePath);
+  if (!saved) return;
+  openTerminal(worktreePath, saved.kind, saved.sessionId);
 }
 
 // Blur the currently active terminal (called by keynav on double-Esc exit).
