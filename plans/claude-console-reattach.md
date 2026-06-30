@@ -233,7 +233,7 @@ idle reaper stays bounded.
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
 - [x] Code-reviewer agent has verified this phase (verdict: green; 2 nits, none blocking)
-- [ ] Any changes made in response to code-reviewer suggestions reflected back into this plan file
+- [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file (gated /exit sequence to kind==='claude'; commit 2b5d708)
 - [x] Tests for this phase written and passing
 - [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
