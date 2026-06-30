@@ -64,9 +64,11 @@ medium-risk part.
   (`main.js:116-127`). A module-level one-shot guard ensures it never refires on
   the 2 s poll. Because the user may navigate before/after that first tick, the
   one-shot reads the **currently-resolved** selection (`selected`) at dispatch
-  and no-ops unless it's a `worktree`; navigating to a *different* worktree later
-  reconnects lazily through the normal `activateTab`/open path, not through this
-  bootstrap one-shot. No timing window resurrects the wrong worktree's console.
+  and no-ops unless it's a `worktree`. Navigating to a *different* worktree later
+  does **not** reattach — the normal open path calls `openTerminal` with a fresh
+  `newSessionId()` and never consults the store, so it spawns a new console
+  (load-time bootstrap is the only reattach trigger; later-navigation reattach
+  was out of scope). No timing window resurrects the wrong worktree's console.
 - **Group-deletion cleanup (no dangling key).** `closeTab` removes the persisted
   descriptor *before* it deletes the group on last-tab close (`terminals.js:236-244`),
   so the `localpm.termSessions` entry never outlives its group.
@@ -174,7 +176,7 @@ leaf `term-sessions.js`.
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
 - [x] Code-reviewer agent has verified this phase (verdict: green; 3 nits, none blocking)
-- [ ] Any changes made in response to code-reviewer suggestions reflected back into this plan file
+- [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file (corrected "lazy reconnect" wording → load-time bootstrap only)
 - [x] Tests for this phase written and passing
 - [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
