@@ -139,14 +139,14 @@ the tab (`✕`) and then reloading does **not** resurrect the console.
 
 **Steps:**
 
-- [ ] Create `public/js/term-sessions.js` as a leaf module: `STORAGE_KEY = 'localpm.termSessions'`; `loadSessions()` tolerant read → `{}` on corrupt/missing, keeping only entries whose key is a string path and whose value is a descriptor `{ sessionId: string, kind: string }` (drop anything malformed); `getSession(path)` → descriptor or `null`; `setSession(path, sessionId, kind)` (overwrites — one descriptor per path); `removeSession(path)`; quota/disabled-storage swallowed on write — copy the tolerance shape from `term-macros.js` / `keynav/mru.js` exactly. No DOM, no app imports.
-- [ ] In `terminals.js`, change `openTerminal(worktreePath, kind)` → `openTerminal(worktreePath, kind, sessionId = newSessionId())` so a caller can supply a saved id; keep the existing `newSessionId()` default for the `+ Shell` / `+ Claude` buttons (`main-pane.js:78-79` unchanged).
-- [ ] In `terminals.js` `connectSession(group, sessionId)`, after the socket is created, persist via `setSession(group.worktreePath, sessionId, sess.kind)` (`sess.kind` is already on the session object — line 194). This single call covers first-open and the background-tab reattach (`activateTab:217`) — idempotent, single-console, and records the real kind so a reconnected shell is not relabeled "Claude".
-- [ ] In `terminals.js` `closeTab(group, sessionId)`, call `removeSession(group.worktreePath)` **before** the last-tab `group.root.remove()` / `terminalGroups.delete` branch (`terminals.js:236-244`) so an explicit user close does not resurrect on next load and leaves no descriptor dangling past its group (verified: `closeTab` has no unload caller).
-- [ ] Add exported `reconnectActiveWorktree(worktreePath)` in `terminals.js`: no-op if `worktreePath` is falsy, a group already exists for it (`terminalGroups.has`), or `getSession(worktreePath)` is empty; otherwise read the saved descriptor and call `openTerminal(worktreePath, saved.kind, saved.sessionId)` so the server replays scrollback into a correctly-labeled tab. Keep it a small focused function; the existing `openTerminal` does the heavy lifting (thin-entry-point principle).
-- [ ] In `main.js`, add a module-level one-shot guard (`let reattached = false`) and, inside `tick()` after `render(lastState)`, fire the reconnect **once** against the **currently-resolved** selection at that moment: `if (!reattached) { reattached = true; reconnectActiveWorktree(selected?.type === 'worktree' ? selected.path : null); }` (`selected` is already imported from `selection.js`). This runs after the first successful tick when worktree paths + the resolved selection are known (`main.js:116-127`), targets whatever worktree is active *at fire time*, and never refires on the 2 s poll. No business logic inline — `main.js` only invokes the helper.
-- [ ] Write `public/js/term-sessions.test.js` (node:test + node:assert/strict, localStorage stub copied from `term-macros.test.js`).
-- [ ] Author `.ai/decisions/terminal-session-reattach-localstorage.md` and update `.ai/index.md` + `public/js/README.md` (see Documentation / Knowledge Base Impact).
+- [x] Create `public/js/term-sessions.js` as a leaf module: `STORAGE_KEY = 'localpm.termSessions'`; `loadSessions()` tolerant read → `{}` on corrupt/missing, keeping only entries whose key is a string path and whose value is a descriptor `{ sessionId: string, kind: string }` (drop anything malformed); `getSession(path)` → descriptor or `null`; `setSession(path, sessionId, kind)` (overwrites — one descriptor per path); `removeSession(path)`; quota/disabled-storage swallowed on write — copy the tolerance shape from `term-macros.js` / `keynav/mru.js` exactly. No DOM, no app imports.
+- [x] In `terminals.js`, change `openTerminal(worktreePath, kind)` → `openTerminal(worktreePath, kind, sessionId = newSessionId())` so a caller can supply a saved id; keep the existing `newSessionId()` default for the `+ Shell` / `+ Claude` buttons (`main-pane.js:78-79` unchanged).
+- [x] In `terminals.js` `connectSession(group, sessionId)`, after the socket is created, persist via `setSession(group.worktreePath, sessionId, sess.kind)` (`sess.kind` is already on the session object — line 194). This single call covers first-open and the background-tab reattach (`activateTab:217`) — idempotent, single-console, and records the real kind so a reconnected shell is not relabeled "Claude".
+- [x] In `terminals.js` `closeTab(group, sessionId)`, call `removeSession(group.worktreePath)` **before** the last-tab `group.root.remove()` / `terminalGroups.delete` branch (`terminals.js:236-244`) so an explicit user close does not resurrect on next load and leaves no descriptor dangling past its group (verified: `closeTab` has no unload caller).
+- [x] Add exported `reconnectActiveWorktree(worktreePath)` in `terminals.js`: no-op if `worktreePath` is falsy, a group already exists for it (`terminalGroups.has`), or `getSession(worktreePath)` is empty; otherwise read the saved descriptor and call `openTerminal(worktreePath, saved.kind, saved.sessionId)` so the server replays scrollback into a correctly-labeled tab. Keep it a small focused function; the existing `openTerminal` does the heavy lifting (thin-entry-point principle).
+- [x] In `main.js`, add a module-level one-shot guard (`let reattached = false`) and, inside `tick()` after `render(lastState)`, fire the reconnect **once** against the **currently-resolved** selection at that moment: `if (!reattached) { reattached = true; reconnectActiveWorktree(selected?.type === 'worktree' ? selected.path : null); }` (`selected` is already imported from `selection.js`). This runs after the first successful tick when worktree paths + the resolved selection are known (`main.js:116-127`), targets whatever worktree is active *at fire time*, and never refires on the 2 s poll. No business logic inline — `main.js` only invokes the helper.
+- [x] Write `public/js/term-sessions.test.js` (node:test + node:assert/strict, localStorage stub copied from `term-macros.test.js`).
+- [x] Author `.ai/decisions/terminal-session-reattach-localstorage.md` and update `.ai/index.md` + `public/js/README.md` (see Documentation / Knowledge Base Impact).
 
 **Tests:**
 
@@ -161,7 +161,7 @@ leaf `term-sessions.js`.
 
 **Verification:**
 
-- [ ] Automated tests for this phase pass: `pnpm test`
+- [x] Automated tests for this phase pass: `pnpm test`
 - [ ] Manual acid test: open a Claude console in a worktree, hold a short conversation, refresh the browser → same conversation + scrollback return in that worktree
 - [ ] Confirm via Task Manager / process list that **no** duplicate/orphaned claude was spawned by the refresh (the pre-refresh PID is reused)
 - [ ] Confirm reload does **not** clear the key but explicit `✕` close **does**: reload keeps the conversation; closing the tab then reloading does **not** resurrect (`localpm.termSessions` no longer has that path, and the entry is gone immediately on last-tab close — no dangling descriptor)
@@ -173,12 +173,12 @@ leaf `term-sessions.js`.
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
+- [x] Code-reviewer agent has verified this phase (verdict: green; 3 nits, none blocking)
 - [ ] Any changes made in response to code-reviewer suggestions reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (see Documentation section)
+- [x] Tests for this phase written and passing
+- [x] Documentation updated (see Documentation section)
 - [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat(ui): persist + reconnect per-worktree console sessionId across refresh`
+- [x] Changes committed: `feat(ui): persist + reconnect per-worktree console sessionId across refresh`
 - [ ] Phase marked complete
 
 ---
