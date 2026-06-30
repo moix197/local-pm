@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-30
 **Branch:** feat/claude-console-reattach
-**Status:** not started
+**Status:** complete
 
 ## Context
 
@@ -179,9 +179,9 @@ leaf `term-sessions.js`.
 - [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file (corrected "lazy reconnect" wording → load-time bootstrap only)
 - [x] Tests for this phase written and passing
 - [x] Documentation updated (see Documentation section)
-- [ ] Orchestrator (user) has verified and approved this phase
+- [x] Orchestrator (user) has verified and approved this phase
 - [x] Changes committed: `feat(ui): persist + reconnect per-worktree console sessionId across refresh`
-- [ ] Phase marked complete
+- [x] Phase marked complete
 
 ---
 
@@ -236,9 +236,9 @@ idle reaper stays bounded.
 - [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file (gated /exit sequence to kind==='claude'; commit 2b5d708)
 - [x] Tests for this phase written and passing
 - [x] Documentation updated (see Documentation section)
-- [ ] Orchestrator (user) has verified and approved this phase
+- [x] Orchestrator (user) has verified and approved this phase
 - [x] Changes committed: `feat(pty): graceful claude exit before force-kill to finalize session JSONL`
-- [ ] Phase marked complete
+- [x] Phase marked complete
 
 ---
 
@@ -256,17 +256,17 @@ idle reaper stays bounded.
 
 **Steps:**
 
-- [ ] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent reviews the entire change end-to-end
-- [ ] Any changes made in response to the final code-reviewer review reflected back into this plan file
-- [ ] All tests pass (`pnpm test`)
-- [ ] No CLAUDE.md invariants violated (pnpm only; thin entry points — logic in `term-sessions.js`/`pty.js` helpers, not inline in `main.js` bootstrap; reused the existing localStorage leaf pattern; small focused functions; no new dependencies; `src/worktrees.js` cwd untouched; all PTY kill paths stay in `pty.js`, `server.js` untouched)
-- [ ] Cross-phase manual test: console open → refresh (Phase 1 reconnect) → close app → reopen → `/resume` (Phase 2 finalize) in one session
-- [ ] Regression sweep: switch worktrees, open multiple consoles, toggle focus mode, use macros + desktop keynav — all still work
-- [ ] Overall success criteria met
-- [ ] All phase checkboxes above are ticked
+- [x] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] Code-reviewer agent reviews the entire change end-to-end
+- [x] Any changes made in response to the final code-reviewer review reflected back into this plan file
+- [x] All tests pass (`pnpm test`)
+- [x] No CLAUDE.md invariants violated (pnpm only; thin entry points — logic in `term-sessions.js`/`pty.js` helpers, not inline in `main.js` bootstrap; reused the existing localStorage leaf pattern; small focused functions; no new dependencies; `src/worktrees.js` cwd untouched; all PTY kill paths stay in `pty.js`, `server.js` untouched)
+- [x] Cross-phase manual test: console open → refresh (Phase 1 reconnect) → close app → reopen → `/resume` (Phase 2 finalize) in one session
+- [x] Regression sweep: switch worktrees, open multiple consoles, toggle focus mode, use macros + desktop keynav — all still work
+- [x] Overall success criteria met
+- [x] All phase checkboxes above are ticked
 
 ## Documentation
 
