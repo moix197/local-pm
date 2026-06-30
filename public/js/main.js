@@ -27,6 +27,7 @@ import { assertBadge } from './keynav/mode-badge.js';
 import { getMode } from './keynav/mode.js';
 import { isDesktop } from './keynav/desktop-gate.js';
 import { refreshPaletteIfOpen } from './keynav/palette.js';
+import { reconnectActiveWorktree } from './terminals.js';
 
 function showLoginOverlay(errorMsg = '') {
   document.getElementById('overlayError').textContent = errorMsg;
@@ -112,6 +113,7 @@ function render(state, busy = inFlight) {
 }
 
 let pollingInterval = null;
+let reattached = false;
 
 async function tick() {
   if (!inFlight) {
@@ -119,6 +121,7 @@ async function tick() {
       const [state] = await Promise.all([fetchState(), fetchProjects()]);
       setLastState(state);
       render(lastState);
+      if (!reattached) { reattached = true; reconnectActiveWorktree(selected?.type === 'worktree' ? selected.path : null); }
     } catch (err) {
       if (err instanceof AuthError) return renderAuthError();
       throw err;

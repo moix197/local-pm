@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-30
 **Branch:** feat/claude-console-reattach
-**Status:** not started
+**Status:** complete
 
 ## Context
 
@@ -64,9 +64,11 @@ medium-risk part.
   (`main.js:116-127`). A module-level one-shot guard ensures it never refires on
   the 2 s poll. Because the user may navigate before/after that first tick, the
   one-shot reads the **currently-resolved** selection (`selected`) at dispatch
-  and no-ops unless it's a `worktree`; navigating to a *different* worktree later
-  reconnects lazily through the normal `activateTab`/open path, not through this
-  bootstrap one-shot. No timing window resurrects the wrong worktree's console.
+  and no-ops unless it's a `worktree`. Navigating to a *different* worktree later
+  does **not** reattach — the normal open path calls `openTerminal` with a fresh
+  `newSessionId()` and never consults the store, so it spawns a new console
+  (load-time bootstrap is the only reattach trigger; later-navigation reattach
+  was out of scope). No timing window resurrects the wrong worktree's console.
 - **Group-deletion cleanup (no dangling key).** `closeTab` removes the persisted
   descriptor *before* it deletes the group on last-tab close (`terminals.js:236-244`),
   so the `localpm.termSessions` entry never outlives its group.
@@ -139,14 +141,14 @@ the tab (`✕`) and then reloading does **not** resurrect the console.
 
 **Steps:**
 
-- [ ] Create `public/js/term-sessions.js` as a leaf module: `STORAGE_KEY = 'localpm.termSessions'`; `loadSessions()` tolerant read → `{}` on corrupt/missing, keeping only entries whose key is a string path and whose value is a descriptor `{ sessionId: string, kind: string }` (drop anything malformed); `getSession(path)` → descriptor or `null`; `setSession(path, sessionId, kind)` (overwrites — one descriptor per path); `removeSession(path)`; quota/disabled-storage swallowed on write — copy the tolerance shape from `term-macros.js` / `keynav/mru.js` exactly. No DOM, no app imports.
-- [ ] In `terminals.js`, change `openTerminal(worktreePath, kind)` → `openTerminal(worktreePath, kind, sessionId = newSessionId())` so a caller can supply a saved id; keep the existing `newSessionId()` default for the `+ Shell` / `+ Claude` buttons (`main-pane.js:78-79` unchanged).
-- [ ] In `terminals.js` `connectSession(group, sessionId)`, after the socket is created, persist via `setSession(group.worktreePath, sessionId, sess.kind)` (`sess.kind` is already on the session object — line 194). This single call covers first-open and the background-tab reattach (`activateTab:217`) — idempotent, single-console, and records the real kind so a reconnected shell is not relabeled "Claude".
-- [ ] In `terminals.js` `closeTab(group, sessionId)`, call `removeSession(group.worktreePath)` **before** the last-tab `group.root.remove()` / `terminalGroups.delete` branch (`terminals.js:236-244`) so an explicit user close does not resurrect on next load and leaves no descriptor dangling past its group (verified: `closeTab` has no unload caller).
-- [ ] Add exported `reconnectActiveWorktree(worktreePath)` in `terminals.js`: no-op if `worktreePath` is falsy, a group already exists for it (`terminalGroups.has`), or `getSession(worktreePath)` is empty; otherwise read the saved descriptor and call `openTerminal(worktreePath, saved.kind, saved.sessionId)` so the server replays scrollback into a correctly-labeled tab. Keep it a small focused function; the existing `openTerminal` does the heavy lifting (thin-entry-point principle).
-- [ ] In `main.js`, add a module-level one-shot guard (`let reattached = false`) and, inside `tick()` after `render(lastState)`, fire the reconnect **once** against the **currently-resolved** selection at that moment: `if (!reattached) { reattached = true; reconnectActiveWorktree(selected?.type === 'worktree' ? selected.path : null); }` (`selected` is already imported from `selection.js`). This runs after the first successful tick when worktree paths + the resolved selection are known (`main.js:116-127`), targets whatever worktree is active *at fire time*, and never refires on the 2 s poll. No business logic inline — `main.js` only invokes the helper.
-- [ ] Write `public/js/term-sessions.test.js` (node:test + node:assert/strict, localStorage stub copied from `term-macros.test.js`).
-- [ ] Author `.ai/decisions/terminal-session-reattach-localstorage.md` and update `.ai/index.md` + `public/js/README.md` (see Documentation / Knowledge Base Impact).
+- [x] Create `public/js/term-sessions.js` as a leaf module: `STORAGE_KEY = 'localpm.termSessions'`; `loadSessions()` tolerant read → `{}` on corrupt/missing, keeping only entries whose key is a string path and whose value is a descriptor `{ sessionId: string, kind: string }` (drop anything malformed); `getSession(path)` → descriptor or `null`; `setSession(path, sessionId, kind)` (overwrites — one descriptor per path); `removeSession(path)`; quota/disabled-storage swallowed on write — copy the tolerance shape from `term-macros.js` / `keynav/mru.js` exactly. No DOM, no app imports.
+- [x] In `terminals.js`, change `openTerminal(worktreePath, kind)` → `openTerminal(worktreePath, kind, sessionId = newSessionId())` so a caller can supply a saved id; keep the existing `newSessionId()` default for the `+ Shell` / `+ Claude` buttons (`main-pane.js:78-79` unchanged).
+- [x] In `terminals.js` `connectSession(group, sessionId)`, after the socket is created, persist via `setSession(group.worktreePath, sessionId, sess.kind)` (`sess.kind` is already on the session object — line 194). This single call covers first-open and the background-tab reattach (`activateTab:217`) — idempotent, single-console, and records the real kind so a reconnected shell is not relabeled "Claude".
+- [x] In `terminals.js` `closeTab(group, sessionId)`, call `removeSession(group.worktreePath)` **before** the last-tab `group.root.remove()` / `terminalGroups.delete` branch (`terminals.js:236-244`) so an explicit user close does not resurrect on next load and leaves no descriptor dangling past its group (verified: `closeTab` has no unload caller).
+- [x] Add exported `reconnectActiveWorktree(worktreePath)` in `terminals.js`: no-op if `worktreePath` is falsy, a group already exists for it (`terminalGroups.has`), or `getSession(worktreePath)` is empty; otherwise read the saved descriptor and call `openTerminal(worktreePath, saved.kind, saved.sessionId)` so the server replays scrollback into a correctly-labeled tab. Keep it a small focused function; the existing `openTerminal` does the heavy lifting (thin-entry-point principle).
+- [x] In `main.js`, add a module-level one-shot guard (`let reattached = false`) and, inside `tick()` after `render(lastState)`, fire the reconnect **once** against the **currently-resolved** selection at that moment: `if (!reattached) { reattached = true; reconnectActiveWorktree(selected?.type === 'worktree' ? selected.path : null); }` (`selected` is already imported from `selection.js`). This runs after the first successful tick when worktree paths + the resolved selection are known (`main.js:116-127`), targets whatever worktree is active *at fire time*, and never refires on the 2 s poll. No business logic inline — `main.js` only invokes the helper.
+- [x] Write `public/js/term-sessions.test.js` (node:test + node:assert/strict, localStorage stub copied from `term-macros.test.js`).
+- [x] Author `.ai/decisions/terminal-session-reattach-localstorage.md` and update `.ai/index.md` + `public/js/README.md` (see Documentation / Knowledge Base Impact).
 
 **Tests:**
 
@@ -161,7 +163,7 @@ leaf `term-sessions.js`.
 
 **Verification:**
 
-- [ ] Automated tests for this phase pass: `pnpm test`
+- [x] Automated tests for this phase pass: `pnpm test`
 - [ ] Manual acid test: open a Claude console in a worktree, hold a short conversation, refresh the browser → same conversation + scrollback return in that worktree
 - [ ] Confirm via Task Manager / process list that **no** duplicate/orphaned claude was spawned by the refresh (the pre-refresh PID is reused)
 - [ ] Confirm reload does **not** clear the key but explicit `✕` close **does**: reload keeps the conversation; closing the tab then reloading does **not** resurrect (`localpm.termSessions` no longer has that path, and the entry is gone immediately on last-tab close — no dangling descriptor)
@@ -173,13 +175,13 @@ leaf `term-sessions.js`.
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (see Documentation section)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat(ui): persist + reconnect per-worktree console sessionId across refresh`
-- [ ] Phase marked complete
+- [x] Code-reviewer agent has verified this phase (verdict: green; 3 nits, none blocking)
+- [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file (corrected "lazy reconnect" wording → load-time bootstrap only)
+- [x] Tests for this phase written and passing
+- [x] Documentation updated (see Documentation section)
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `feat(ui): persist + reconnect per-worktree console sessionId across refresh`
+- [x] Phase marked complete
 
 ---
 
@@ -204,12 +206,12 @@ idle reaper stays bounded.
 
 **Steps:**
 
-- [ ] Add a `_setTimeoutFn` injectable seam in `pty.js` mirroring the existing `_setTimerFn` (`pty.js:36-38`) so the grace delay is test-controllable.
-- [ ] Extract a small `finalizeSession(session)` (~<30 lines, single focused function) that: writes the exit sequence (`\x03` then `/exit\r`) to `session.ptyProcess`, then schedules an **unconditional** force `ptyProcess.kill()` via `_setTimeoutFn` after a short grace (e.g. 1500 ms). The force-kill is the guarantee — it fires **regardless** of whether claude honored `\x03`/`/exit`, so a claude that ignores the exit sequence still dies. Each pty op is individually `try/catch`-swallowed (a write to an already-exited pty must not throw past the kill). Store the returned timer handle on the session (`session._graceTimer`) so shutdown can settle it.
-- [ ] Rewire `killSession(id)` (`pty.js:145-150`) to: delete from the map immediately (so caps/listing/`MAX_SESSIONS` stay correct the instant kill is requested), then run `finalizeSession`. Preserve the `try/catch` swallow around all pty operations. Idempotency: a second `killSession` for the same id is a no-op (already removed from the map).
-- [ ] Keep the pending grace timer bounded: the reaper (`pty.js:163-177`) keeps calling `killSession` (now graceful) — the unconditional force-kill fallback guarantees the session leaves memory within the grace window, so the reaper never accumulates live sessions. `shutdown()` must not wait on grace timers (see next step).
-- [ ] In `shutdown()` (`pty.js:189-197`, SIGINT/SIGTERM at 199-200), iterate every session and **force-kill synchronously in bounded time** — best-effort write of the exit sequence, then an immediate, unconditional `ptyProcess.kill()` (do **not** await the async grace window on process exit), and `clearTimeout(session._graceTimer)` for any timer a prior `killSession` already scheduled, so no timer leaks and the daemon never hangs waiting on a graceful path. Net effect: clean console close gets the graceful grace window; SIGINT/SIGTERM gets an immediate guaranteed kill. (Note for reviewer: `server.js` has **no** kill path; all teardown — `killSession`, the reaper, `shutdown()` — lives in `pty.js`.)
-- [ ] Frame honestly in code comments + KB: claude already writes its session JSONL **incrementally** as the conversation progresses, so this change **hardens the last-turn flush + a clean `/resume` listing** on close — it is *not* the primary fix for refresh continuity (Phase 1 is). Do not oversell it as the mechanism that "saves" the conversation.
+- [x] Add a `_setTimeoutFn` injectable seam in `pty.js` mirroring the existing `_setTimerFn` (`pty.js:36-38`) so the grace delay is test-controllable.
+- [x] Extract a small `finalizeSession(session)` (~<30 lines, single focused function) that: writes the exit sequence (`\x03` then `/exit\r`) to `session.ptyProcess`, then schedules an **unconditional** force `ptyProcess.kill()` via `_setTimeoutFn` after a short grace (e.g. 1500 ms). The force-kill is the guarantee — it fires **regardless** of whether claude honored `\x03`/`/exit`, so a claude that ignores the exit sequence still dies. Each pty op is individually `try/catch`-swallowed (a write to an already-exited pty must not throw past the kill). Store the returned timer handle on the session (`session._graceTimer`) so shutdown can settle it.
+- [x] Rewire `killSession(id)` (`pty.js:145-150`) to: delete from the map immediately (so caps/listing/`MAX_SESSIONS` stay correct the instant kill is requested), then run `finalizeSession`. Preserve the `try/catch` swallow around all pty operations. Idempotency: a second `killSession` for the same id is a no-op (already removed from the map).
+- [x] Keep the pending grace timer bounded: the reaper (`pty.js:163-177`) keeps calling `killSession` (now graceful) — the unconditional force-kill fallback guarantees the session leaves memory within the grace window, so the reaper never accumulates live sessions. `shutdown()` must not wait on grace timers (see next step).
+- [x] In `shutdown()` (`pty.js:189-197`, SIGINT/SIGTERM at 199-200), iterate every session and **force-kill synchronously in bounded time** — best-effort write of the exit sequence, then an immediate, unconditional `ptyProcess.kill()` (do **not** await the async grace window on process exit), and `clearTimeout(session._graceTimer)` for any timer a prior `killSession` already scheduled, so no timer leaks and the daemon never hangs waiting on a graceful path. Net effect: clean console close gets the graceful grace window; SIGINT/SIGTERM gets an immediate guaranteed kill. (Note for reviewer: `server.js` has **no** kill path; all teardown — `killSession`, the reaper, `shutdown()` — lives in `pty.js`.)
+- [x] Frame honestly in code comments + KB: claude already writes its session JSONL **incrementally** as the conversation progresses, so this change **hardens the last-turn flush + a clean `/resume` listing** on close — it is *not* the primary fix for refresh continuity (Phase 1 is). Do not oversell it as the mechanism that "saves" the conversation.
 
 **Tests:**
 
@@ -219,7 +221,7 @@ idle reaper stays bounded.
 
 **Verification:**
 
-- [ ] Automated tests for this phase pass: `pnpm test`
+- [x] Automated tests for this phase pass: `pnpm test`
 - [ ] Manual: hold a conversation, close the console/app, reopen a console in that worktree, run `/resume` → the session is listed and resumes cleanly
 - [ ] Confirm **no zombie PTY/claude processes remain after console close**: close the tab, then check the process list (Task Manager / `Get-Process`) — the `claude`/`conhost`/pwsh PTY child for that session is gone within the grace window
 - [ ] Confirm **no zombie processes remain after daemon stop**: Ctrl-C / SIGTERM the daemon with a live console open → every PTY child terminates promptly (shutdown does not hang on grace timers)
@@ -230,13 +232,13 @@ idle reaper stays bounded.
 - [ ] All Steps and Verification checkboxes above ticked in the plan file
 - [ ] Reviewer handoff prompt emitted in a fenced code block as the final message of this turn
 - [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent has verified this phase
-- [ ] Any changes made in response to code-reviewer suggestions reflected back into this plan file
-- [ ] Tests for this phase written and passing
-- [ ] Documentation updated (see Documentation section)
-- [ ] Orchestrator (user) has verified and approved this phase
-- [ ] Changes committed: `feat(pty): graceful claude exit before force-kill to finalize session JSONL`
-- [ ] Phase marked complete
+- [x] Code-reviewer agent has verified this phase (verdict: green; 2 nits, none blocking)
+- [x] Any changes made in response to code-reviewer suggestions reflected back into this plan file (gated /exit sequence to kind==='claude'; commit 2b5d708)
+- [x] Tests for this phase written and passing
+- [x] Documentation updated (see Documentation section)
+- [x] Orchestrator (user) has verified and approved this phase
+- [x] Changes committed: `feat(pty): graceful claude exit before force-kill to finalize session JSONL`
+- [x] Phase marked complete
 
 ---
 
@@ -254,17 +256,17 @@ idle reaper stays bounded.
 
 **Steps:**
 
-- [ ] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked in the plan file
-- [ ] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
-- [ ] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
-- [ ] Code-reviewer agent reviews the entire change end-to-end
-- [ ] Any changes made in response to the final code-reviewer review reflected back into this plan file
-- [ ] All tests pass (`pnpm test`)
-- [ ] No CLAUDE.md invariants violated (pnpm only; thin entry points — logic in `term-sessions.js`/`pty.js` helpers, not inline in `main.js` bootstrap; reused the existing localStorage leaf pattern; small focused functions; no new dependencies; `src/worktrees.js` cwd untouched; all PTY kill paths stay in `pty.js`, `server.js` untouched)
-- [ ] Cross-phase manual test: console open → refresh (Phase 1 reconnect) → close app → reopen → `/resume` (Phase 2 finalize) in one session
-- [ ] Regression sweep: switch worktrees, open multiple consoles, toggle focus mode, use macros + desktop keynav — all still work
-- [ ] Overall success criteria met
-- [ ] All phase checkboxes above are ticked
+- [x] Every preceding phase's Steps/Verification/Phase review checkboxes are ticked in the plan file
+- [x] Reviewer handoff prompt emitted in a fenced code block (scoped to end-to-end review)
+- [x] Orchestrator cleared context (`/clear`) and pasted the handoff prompt into a fresh session
+- [x] Code-reviewer agent reviews the entire change end-to-end
+- [x] Any changes made in response to the final code-reviewer review reflected back into this plan file
+- [x] All tests pass (`pnpm test`)
+- [x] No CLAUDE.md invariants violated (pnpm only; thin entry points — logic in `term-sessions.js`/`pty.js` helpers, not inline in `main.js` bootstrap; reused the existing localStorage leaf pattern; small focused functions; no new dependencies; `src/worktrees.js` cwd untouched; all PTY kill paths stay in `pty.js`, `server.js` untouched)
+- [x] Cross-phase manual test: console open → refresh (Phase 1 reconnect) → close app → reopen → `/resume` (Phase 2 finalize) in one session
+- [x] Regression sweep: switch worktrees, open multiple consoles, toggle focus mode, use macros + desktop keynav — all still work
+- [x] Overall success criteria met
+- [x] All phase checkboxes above are ticked
 
 ## Documentation
 

@@ -133,7 +133,17 @@ full scrollback to the new socket in order, then sets it as the live client
 and stamps `idleAt` — the PTY keeps running. A 60s reaper kills sessions idle (no
 client) longer than `IDLE_TIMEOUT_MS` (env `LOCAL_PM_IDLE_TIMEOUT_MINUTES`, default
 30 min). This is what lets a browser reattach to a still-running terminal and see
-its backlog.
+its backlog. On teardown, `killSession` removes the session from the map immediately
+(so `MAX_SESSIONS` cap is correct at once), then `finalizeSession` writes `\x03` +
+`/exit\r` to ask claude to flush its incremental session JSONL, and schedules an
+unconditional force-kill after a 1500 ms grace window — preventing zombie ConPTY
+processes on Windows. claude already writes JSONL as the conversation progresses, so
+this hardens the last-turn flush for a cleaner `/resume` listing on close; it is not
+the primary fix for refresh continuity (that is the `localStorage` reattach in
+`term-sessions.js`). On SIGINT/SIGTERM, `shutdown()` skips the grace window and kills
+every session synchronously, also cancelling any pending grace timers from prior
+`killSession` calls (tracked in `_pendingGrace`) so the daemon exits promptly with no
+leaked timers.
 
 MCP flow: an MCP client invokes a tool (`list_worktrees`, `status`, `start_server`,
 `stop_server`) over stdio → `mcp/index.js` resolves the bearer token (env

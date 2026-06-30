@@ -37,6 +37,23 @@ export function _setGetWorktreesFn(fn) { _getWorktrees = fn; }
 let _timerFn = setInterval;
 export function _setTimerFn(fn) { _timerFn = fn; }
 
+// Injectable seam for grace-period timeout (tests drive via fake)
+let _timeoutFn = setTimeout;
+export function _setTimeoutFn(fn) { _timeoutFn = fn; }
+
+// Injectable seam for cancelling grace timers (tests assert cancellation)
+let _clearTimeoutFn = clearTimeout;
+export function _setClearTimeoutFn(fn) { _clearTimeoutFn = fn; }
+
+// Tracks sessions with a pending grace-kill timer so shutdown() can cancel them
+const _pendingGrace = new Set();
+export function _clearPendingGrace() {
+  for (const session of _pendingGrace) {
+    _clearTimeoutFn(session._graceTimer);
+  }
+  _pendingGrace.clear();
+}
+
 /** @type {Map<string, {id:string, ptyProcess:object, worktreePath:string, kind:string, scrollback:string[], scrollbackBytes:number, ws:object|null, idleAt:number}>} */
 const sessions = new Map();
 
@@ -142,11 +159,36 @@ export function resizeSession(id, cols, rows) {
   session.ptyProcess.resize(clampDim(cols), clampDim(rows));
 }
 
+// Graceful session teardown: for claude sessions, write exit sequence to prompt
+// claude to flush its incremental session JSONL, then unconditionally force-kill
+// after a short grace window. Shell sessions skip the exit sequence (bogus command)
+// but are still force-killed unconditionally via the grace timer. claude already
+// writes JSONL as the conversation progresses — this hardens the last-turn flush
+// for a cleaner /resume listing on close. It is NOT the primary fix for refresh
+// continuity (Phase 1 handles that). On SIGINT/SIGTERM, shutdown() skips this path
+// and kills synchronously; do not block daemon exit here.
+function finalizeSession(session) {
+  _pendingGrace.add(session);
+  // Best-effort exit sequence for claude sessions only — each op individually
+  // swallowed so a dead pty cannot throw past the kill
+  if (session.kind === 'claude') {
+    try { session.ptyProcess.write('\x03'); } catch {}
+    try { session.ptyProcess.write('/exit\r'); } catch {}
+  }
+  // Unconditional force-kill after grace — fires regardless of session kind and
+  // regardless of whether claude honored the exit sequence, preventing zombie
+  // ConPTY processes on Windows
+  session._graceTimer = _timeoutFn(() => {
+    _pendingGrace.delete(session);
+    try { session.ptyProcess.kill(); } catch {}
+  }, 1500);
+}
+
 export function killSession(id) {
   const session = sessions.get(id);
-  if (!session) return;
-  sessions.delete(id);
-  try { session.ptyProcess.kill(); } catch {}
+  if (!session) return; // idempotent: second call for same id is a no-op
+  sessions.delete(id); // remove immediately so MAX_SESSIONS cap stays correct
+  finalizeSession(session);
 }
 
 export function getSession(id) {
@@ -191,9 +233,24 @@ export function shutdown() {
     clearInterval(_reaperInterval);
     _reaperInterval = null;
   }
-  for (const id of [...sessions.keys()]) {
-    killSession(id);
+  // Force-kill sessions still in the map synchronously — do NOT use the async
+  // grace window on process exit (SIGINT/SIGTERM must terminate promptly).
+  // Best-effort exit sequence only for claude sessions; force-kill is unconditional.
+  for (const session of [...sessions.values()]) {
+    sessions.delete(session.id);
+    if (session.kind === 'claude') {
+      try { session.ptyProcess.write('\x03'); } catch {}
+      try { session.ptyProcess.write('/exit\r'); } catch {}
+    }
+    try { session.ptyProcess.kill(); } catch {}
   }
+  // Cancel grace timers from any prior killSession calls so no timer leaks
+  // survive daemon exit and no pty fires a redundant second kill
+  for (const session of _pendingGrace) {
+    _clearTimeoutFn(session._graceTimer);
+    try { session.ptyProcess.kill(); } catch {}
+  }
+  _pendingGrace.clear();
 }
 
 process.on('SIGINT', shutdown);

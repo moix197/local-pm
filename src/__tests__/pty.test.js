@@ -15,6 +15,9 @@ import {
   _setTimerFn,
   _restartReaper,
   shutdown,
+  _setTimeoutFn,
+  _setClearTimeoutFn,
+  _clearPendingGrace,
 } from '../pty.js';
 
 const FAKE_PATH = 'C:/projects/my-wt';
@@ -53,9 +56,12 @@ function setupFakes(worktreePaths = [FAKE_PATH]) {
   return fakes;
 }
 
-// Drain all sessions between tests to avoid cap leakage
+// Drain all sessions and reset injectable seams between tests
 beforeEach(() => {
+  _setTimeoutFn(setTimeout);
+  _setClearTimeoutFn(clearTimeout);
   for (const s of getAllSessions()) killSession(s.id);
+  _clearPendingGrace();
 });
 
 describe('spawnSession security invariants', () => {
@@ -152,13 +158,23 @@ describe('session operations', () => {
     killSession(session.id);
   });
 
-  it('killSession removes session and calls kill on process', async () => {
+  it('killSession removes session from map immediately and sends exit sequence (claude)', async () => {
+    let timerCallback = null;
+    _setTimeoutFn((fn) => { timerCallback = fn; return {}; });
+
     const fakes = setupFakes();
-    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'claude', cols: 80, rows: 24 });
     const id = session.id;
     killSession(id);
-    assert.equal(getSession(id), null);
-    assert.equal(fakes[0]._calls.kill, 1);
+
+    assert.equal(getSession(id), null, 'session removed from map immediately');
+    assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'exit sequence written before kill');
+    assert.equal(fakes[0]._calls.kill, 0, 'kill deferred — not called immediately');
+    assert.ok(timerCallback, 'grace timer scheduled');
+
+    // Grace fires unconditionally regardless of pty state
+    timerCallback();
+    assert.equal(fakes[0]._calls.kill, 1, 'kill called after grace elapses');
   });
 
   it('getSession returns null for unknown id', () => {
@@ -191,9 +207,10 @@ describe('session operations', () => {
     killSession(shell.id);
     assert.equal(getSession(shell.id), null, 'shell session removed');
     assert.ok(getSession(claude.id), 'claude session still alive');
-    // Only the shell pty was killed
-    assert.equal(fakes[0]._calls.kill, 1, 'shell pty killed once');
+    // Shell pty gets NO exit sequence (shell kind is gated out); kill is deferred to grace timer; claude pty untouched
+    assert.deepEqual(fakes[0]._calls.write, [], 'shell pty received NO exit sequence');
     assert.equal(fakes[1]._calls.kill, 0, 'claude pty NOT killed');
+    assert.deepEqual(fakes[1]._calls.write, [], 'claude pty NOT written to');
 
     killSession(claude.id);
   });
@@ -465,5 +482,133 @@ describe('detach/reattach/scrollback/reaper', () => {
     // Restore
     _setTimerFn(setInterval);
     _restartReaper();
+  });
+});
+
+describe('graceful killSession / shutdown finalize', () => {
+  beforeEach(() => {
+    // Restore real timeout/clear functions between tests in this block
+    _setTimeoutFn(setTimeout);
+    _setClearTimeoutFn(clearTimeout);
+  });
+
+  it('graceful kill (claude): writes \\x03 and /exit\\r before scheduling force-kill', async () => {
+    let timerCallback = null;
+    _setTimeoutFn((fn) => { timerCallback = fn; return {}; });
+
+    const fakes = setupFakes();
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'claude', cols: 80, rows: 24 });
+    killSession(session.id);
+
+    assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'exit sequence written');
+    assert.equal(fakes[0]._calls.kill, 0, 'kill NOT called immediately');
+    assert.ok(timerCallback, 'grace timer scheduled');
+  });
+
+  it('shell session: force-killed via grace timer without exit sequence', async () => {
+    let timerCallback = null;
+    _setTimeoutFn((fn) => { timerCallback = fn; return {}; });
+
+    const fakes = setupFakes();
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    killSession(session.id);
+
+    assert.deepEqual(fakes[0]._calls.write, [], 'no exit sequence written for shell session');
+    assert.equal(fakes[0]._calls.kill, 0, 'kill deferred — not called immediately');
+    assert.ok(timerCallback, 'grace timer still scheduled for shell session');
+
+    timerCallback();
+    assert.equal(fakes[0]._calls.kill, 1, 'shell session force-killed after grace elapses');
+  });
+
+  it('force-kill fires unconditionally when grace elapses even if pty never exited', async () => {
+    let timerCallback = null;
+    _setTimeoutFn((fn) => { timerCallback = fn; return {}; });
+
+    const fakes = setupFakes();
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    killSession(session.id);
+
+    assert.equal(fakes[0]._calls.kill, 0, 'kill NOT called before grace elapses');
+
+    // Simulate grace period expiry — fires unconditionally regardless of pty state
+    timerCallback();
+    assert.equal(fakes[0]._calls.kill, 1, 'kill called after grace elapses');
+  });
+
+  it('killSession: session removed from map immediately (before grace fires)', async () => {
+    _setTimeoutFn((fn) => {}); // capture but never fire
+
+    setupFakes();
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+    const id = session.id;
+    killSession(id);
+
+    assert.equal(getSession(id), null, 'session gone from map immediately');
+    assert.equal(getAllSessions().length, 0, 'no sessions in map');
+  });
+
+  it('killSession: second call is a no-op (idempotent)', async () => {
+    const timerCallbacks = [];
+    _setTimeoutFn((fn) => { timerCallbacks.push(fn); return {}; });
+
+    const fakes = setupFakes();
+    const session = await spawnSession({ worktreePath: FAKE_PATH, kind: 'claude', cols: 80, rows: 24 });
+    const id = session.id;
+
+    killSession(id); // first call — schedules grace
+    killSession(id); // second call — session not in map, must be a no-op
+
+    assert.equal(timerCallbacks.length, 1, 'grace timer scheduled exactly once');
+    assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'exit sequence written exactly once');
+  });
+
+  it('shutdown() force-kills claude sessions synchronously with exit sequence', async () => {
+    _setTimeoutFn((fn) => { return {}; }); // no timer should fire for map sessions
+
+    const fakes = setupFakes();
+    const s = await spawnSession({ worktreePath: FAKE_PATH, kind: 'claude', cols: 80, rows: 24 });
+
+    shutdown();
+
+    assert.equal(getSession(s.id), null, 'session gone from map');
+    assert.deepEqual(fakes[0]._calls.write, ['\x03', '/exit\r'], 'exit sequence written by shutdown');
+    assert.equal(fakes[0]._calls.kill, 1, 'pty killed synchronously by shutdown');
+  });
+
+  it('shutdown() force-kills shell sessions synchronously without exit sequence', async () => {
+    _setTimeoutFn((fn) => { return {}; }); // no timer should fire for map sessions
+
+    const fakes = setupFakes();
+    const s = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+
+    shutdown();
+
+    assert.equal(getSession(s.id), null, 'session gone from map');
+    assert.deepEqual(fakes[0]._calls.write, [], 'no exit sequence for shell session');
+    assert.equal(fakes[0]._calls.kill, 1, 'pty killed synchronously by shutdown');
+  });
+
+  it('shutdown() cancels pending grace timer for sessions already killed via killSession', async () => {
+    let graceHandle = null;
+    let clearedHandle = null;
+    _setTimeoutFn((fn) => { graceHandle = { _fn: fn }; return graceHandle; });
+    _setClearTimeoutFn((h) => { clearedHandle = h; });
+
+    const fakes = setupFakes();
+    const s1 = await spawnSession({ worktreePath: FAKE_PATH, kind: 'shell', cols: 80, rows: 24 });
+
+    // Kill s1 via graceful path — schedules a grace timer
+    killSession(s1.id);
+    assert.equal(getSession(s1.id), null, 's1 removed from map by killSession');
+    assert.equal(fakes[0]._calls.kill, 0, 'grace timer pending — kill deferred');
+    assert.ok(graceHandle, 'grace timer handle captured');
+
+    // Now shutdown() with s1 already grace-pending
+    shutdown();
+
+    // Shutdown cancelled the pending grace timer and killed s1 immediately
+    assert.equal(clearedHandle, graceHandle, 'pending grace timer cleared by shutdown');
+    assert.equal(fakes[0]._calls.kill, 1, 's1 pty killed synchronously by shutdown');
   });
 });
